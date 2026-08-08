@@ -16,13 +16,6 @@ See the Go package documentation for complete APIs and examples. See tests for a
 
 ### gx
 
-- `Accumulator` — Accumulates values and flushes on threshold or timeout.
-- `Map[K, V]` — Generic concurrency-safe map.
-- `Queue[T]` — Processes items using a pool of workers.
-- `Runner` — Runs concurrent tasks with automatic context cancellation on error.
-- `Set[T]` — Generic concurrency-safe set.
-- `Throttler` — Limits how often an action may execute.
-
 #### `Accumulator`
 
 Accumulates values and flushes on threshold or timeout.
