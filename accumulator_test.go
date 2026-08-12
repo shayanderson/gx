@@ -185,7 +185,7 @@ func TestAccumulator_FlushLockedZero(t *testing.T) {
 	a.mu.Unlock()
 }
 
-func TestAccumulator_TimerResets(t *testing.T) {
+func TestAccumulator_TimerDoesNotReset(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -203,22 +203,13 @@ func TestAccumulator_TimerResets(t *testing.T) {
 
 	a.Add(3)
 
-	// wait for half the delay, then add again
-	// this should restart the timer
+	// wait for half the delay, then add again.
+	// this should not restart the timer.
 	time.Sleep(25 * time.Millisecond)
 
 	a.Add(4)
 
-	// ensure the callback does NOT happen at the original 50ms mark
-	select {
-	case n := <-ch:
-		t.Fatalf("callback fired too early with %d", n)
-
-	case <-time.After(35 * time.Millisecond):
-		// good: callback has not fired yet
-	}
-
-	// it should fire after the delay from the second Add()
+	// it should fire on the original interval, not delay from the second Add.
 	select {
 	case n := <-ch:
 		test.Equal(t, 7, n)

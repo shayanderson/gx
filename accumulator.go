@@ -9,9 +9,10 @@ import (
 
 // Accumulator accumulates values and invokes a callback when either:
 //   - the total reaches or exceeds max (if max > 0)
-//   - delay elapses and total > 0
+//   - each delay interval elapses and total > 0
 //
-// after either condition, the total is reset to zero
+// After either condition, the total is reset to zero.
+// Zero totals are not flushed.
 type Accumulator struct {
 	closed bool
 	delay  time.Duration
@@ -22,9 +23,8 @@ type Accumulator struct {
 	total  int
 }
 
-// NewAccumulator creates a new Accumulator
-//
-// a max of zero disables threshold-based flushing
+// NewAccumulator creates a new Accumulator.
+// A max of zero disables threshold-based flushing.
 func NewAccumulator(
 	ctx context.Context,
 	delay time.Duration,
@@ -53,7 +53,7 @@ func NewAccumulator(
 	return a, nil
 }
 
-// Add adds n to the accumulator
+// Add adds n to the accumulator.
 func (a *Accumulator) Add(n int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -67,21 +67,11 @@ func (a *Accumulator) Add(n int) {
 	// flush on threshold if enabled
 	if a.max > 0 && a.total >= a.max {
 		a.flushLocked()
-		return
 	}
-
-	// restart timer
-	if !a.timer.Stop() {
-		select {
-		case <-a.timer.C:
-		default:
-		}
-	}
-	a.timer.Reset(a.delay)
 }
 
-// Close flushes any remaining accumulated value and stops the accumulator
-// Close is safe to call multiple times
+// Close flushes any remaining accumulated value and stops the accumulator.
+// Close is safe to call multiple times.
 func (a *Accumulator) Close() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -106,8 +96,8 @@ func (a *Accumulator) Close() {
 	}
 }
 
-// flushLocked invokes the callback and resets the accumulator
-// caller must hold a.mu
+// flushLocked invokes the callback and resets the accumulator.
+// Caller must hold a.mu.
 func (a *Accumulator) flushLocked() {
 	if a.total == 0 {
 		return
@@ -119,7 +109,7 @@ func (a *Accumulator) flushLocked() {
 	a.fn(total)
 }
 
-// run handles delayed flushes and context cancellation
+// run handles delayed flushes and context cancellation.
 func (a *Accumulator) run(ctx context.Context) {
 	defer a.timer.Stop()
 
@@ -133,9 +123,8 @@ func (a *Accumulator) run(ctx context.Context) {
 
 			if a.total > 0 {
 				a.flushLocked()
-			} else {
-				a.timer.Reset(a.delay)
 			}
+			a.timer.Reset(a.delay)
 
 			a.mu.Unlock()
 		}
