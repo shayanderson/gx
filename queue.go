@@ -8,29 +8,29 @@ import (
 )
 
 var (
-	// ErrQueueAlreadyRunning is returned when trying to run a queue that is already running
+	// ErrQueueAlreadyRunning is returned when trying to run a queue that is already running.
 	ErrQueueAlreadyRunning = errors.New("queue is already running")
 
-	// ErrQueueWorkerRequired is returned when trying to run a queue without a worker
+	// ErrQueueWorkerRequired is returned when trying to run a queue without a worker.
 	ErrQueueWorkerRequired = errors.New("worker must be provided")
 )
 
-// Worker processes an item from a Queue
+// Worker processes an item from a Queue.
 type Worker[T any] func(context.Context, T) error
 
-// QueueOptions represents the options for creating a queue
+// QueueOptions represents the options for creating a queue.
 type QueueOptions[T any] struct {
-	// Size is the buffer size of the queue channel
+	// Size is the buffer size of the queue channel.
 	Size int
 
-	// Worker is the function that processes items from the queue
+	// Worker is the function that processes items from the queue.
 	Worker Worker[T]
 
-	// Workers is the number of worker goroutines to process items from the queue
+	// Workers is the number of worker goroutines to process items from the queue.
 	Workers int
 }
 
-// Queue processes items using a pool of workers
+// Queue processes items using a pool of workers.
 type Queue[T any] struct {
 	closed  bool
 	mu      sync.RWMutex
@@ -41,9 +41,9 @@ type Queue[T any] struct {
 }
 
 // NewQueue creates a new Queue with the specified number of workers,
-// queue buffer size and worker function
-// if workers is 0 or negative, it defaults to 1
-// if size is 0 or negative, it defaults to workers * 4
+// Queue buffer size and worker function.
+// If workers is 0 or negative, it defaults to 1.
+// If size is 0 or negative, it defaults to workers * 4.
 func NewQueue[T any](opts QueueOptions[T]) *Queue[T] {
 	if opts.Workers <= 0 {
 		opts.Workers = 1
@@ -59,9 +59,9 @@ func NewQueue[T any](opts QueueOptions[T]) *Queue[T] {
 	}
 }
 
-// Close closes the queue and prevents new items from being added
-// buffered items already in the queue are still processed
-// subsequent calls to Push return false
+// Close closes the queue and prevents new items from being added.
+// Buffered items already in the queue are still processed.
+// Subsequent calls to Push return false.
 func (q *Queue[T]) Close() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -74,8 +74,8 @@ func (q *Queue[T]) Close() {
 	close(q.queue)
 }
 
-// Push adds an item to the queue
-// returns false if the queue is full or closed
+// Push adds an item to the queue.
+// Returns false if the queue is full or closed.
 func (q *Queue[T]) Push(item T) bool {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -92,8 +92,8 @@ func (q *Queue[T]) Push(item T) bool {
 	}
 }
 
-// Run starts processing items from the queue using the worker function
-// it blocks until the context is canceled or an error occurs in a worker
+// Run starts processing items from the queue using the worker function.
+// It blocks until the context is canceled or an error occurs in a worker.
 func (q *Queue[T]) Run(ctx context.Context) error {
 	if q.worker == nil {
 		return ErrQueueWorkerRequired

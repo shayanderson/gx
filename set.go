@@ -2,13 +2,13 @@ package gx
 
 import "sync"
 
-// Set is a concurrency-safe collection of unique values
+// Set is a concurrency-safe collection of unique values.
 type Set[T comparable] struct {
 	m  map[T]struct{}
 	mu sync.RWMutex
 }
 
-// NewSet returns an empty set
+// NewSet returns an empty set.
 func NewSet[T comparable](values ...T) *Set[T] {
 	s := &Set[T]{
 		m: make(map[T]struct{}, len(values)),
@@ -21,8 +21,8 @@ func NewSet[T comparable](values ...T) *Set[T] {
 	return s
 }
 
-// Add inserts v into the set
-// returns true if v was not already present
+// Add inserts v into the set.
+// It returns true if v was not already present.
 func (s *Set[T]) Add(v T) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -35,7 +35,7 @@ func (s *Set[T]) Add(v T) bool {
 	return true
 }
 
-// Clear removes all values from the set
+// Clear removes all values from the set.
 func (s *Set[T]) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -43,7 +43,7 @@ func (s *Set[T]) Clear() {
 	clear(s.m)
 }
 
-// Has returns true if v is in the set
+// Has returns true if v is in the set.
 func (s *Set[T]) Has(v T) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -52,7 +52,7 @@ func (s *Set[T]) Has(v T) bool {
 	return ok
 }
 
-// Len returns the number of values in the set
+// Len returns the number of values in the set.
 func (s *Set[T]) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -60,8 +60,8 @@ func (s *Set[T]) Len() int {
 	return len(s.m)
 }
 
-// Remove removes v from the set
-// returns true if v was present
+// Remove removes v from the set.
+// It returns true if v was present.
 func (s *Set[T]) Remove(v T) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -74,8 +74,8 @@ func (s *Set[T]) Remove(v T) bool {
 	return true
 }
 
-// Values returns the values in the set
-// the order is unspecified
+// Values returns the values in the set.
+// The order is unspecified.
 func (s *Set[T]) Values() []T {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -11,16 +11,19 @@ import (
 func TestNewAccumulator_InvalidArgs(t *testing.T) {
 	ctx := t.Context()
 
-	_, err := NewAccumulator(ctx, 0, 1, func(int) {})
+	_, err := NewAccumulator(ctx, AccumulatorOptions{Max: 1, Flush: func(int) {}})
 	test.NotNil(t, err)
 
-	_, err = NewAccumulator(ctx, time.Second, -1, func(int) {})
+	_, err = NewAccumulator(
+		ctx,
+		AccumulatorOptions{Delay: time.Second, Max: -1, Flush: func(int) {}},
+	)
 	test.NotNil(t, err)
 
-	_, err = NewAccumulator(ctx, time.Second, 1, nil)
+	_, err = NewAccumulator(ctx, AccumulatorOptions{Delay: time.Second, Max: 1})
 	test.NotNil(t, err)
 
-	_, err = NewAccumulator(ctx, time.Second, 0, nil)
+	_, err = NewAccumulator(ctx, AccumulatorOptions{Delay: time.Second})
 	test.NotNil(t, err)
 }
 
@@ -32,10 +35,12 @@ func TestAccumulator_Max(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		time.Hour,
-		10,
-		func(n int) {
-			total = n
+		AccumulatorOptions{
+			Delay: time.Hour,
+			Max:   10,
+			Flush: func(n int) {
+				total = n
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -58,10 +63,12 @@ func TestAccumulator_Delay(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		50*time.Millisecond,
-		100,
-		func(n int) {
-			ch <- n
+		AccumulatorOptions{
+			Delay: 50 * time.Millisecond,
+			Max:   100,
+			Flush: func(n int) {
+				ch <- n
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -86,10 +93,12 @@ func TestAccumulator_Close(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		time.Hour,
-		100,
-		func(n int) {
-			total = n
+		AccumulatorOptions{
+			Delay: time.Hour,
+			Max:   100,
+			Flush: func(n int) {
+				total = n
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -110,10 +119,12 @@ func TestAccumulator_CloseEmpty(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		time.Hour,
-		100,
-		func(int) {
-			calls++
+		AccumulatorOptions{
+			Delay: time.Hour,
+			Max:   100,
+			Flush: func(int) {
+				calls++
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -131,10 +142,12 @@ func TestAccumulator_CloseTwice(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		time.Hour,
-		100,
-		func(int) {
-			calls++
+		AccumulatorOptions{
+			Delay: time.Hour,
+			Max:   100,
+			Flush: func(int) {
+				calls++
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -155,10 +168,12 @@ func TestAccumulator_AddAfterClose(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		time.Hour,
-		10,
-		func(n int) {
-			calls++
+		AccumulatorOptions{
+			Delay: time.Hour,
+			Max:   10,
+			Flush: func(n int) {
+				calls++
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -193,10 +208,12 @@ func TestAccumulator_TimerDoesNotReset(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		50*time.Millisecond,
-		100,
-		func(n int) {
-			ch <- n
+		AccumulatorOptions{
+			Delay: 50 * time.Millisecond,
+			Max:   100,
+			Flush: func(n int) {
+				ch <- n
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -227,10 +244,12 @@ func TestAccumulator_NoMax(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		50*time.Millisecond,
-		0, // no threshold flushing
-		func(n int) {
-			ch <- n
+		AccumulatorOptions{
+			Delay: 50 * time.Millisecond,
+			Max:   0, // no threshold flushing
+			Flush: func(n int) {
+				ch <- n
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -265,10 +284,12 @@ func TestAccumulator_NoMaxClose(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		time.Hour,
-		0,
-		func(n int) {
-			total = n
+		AccumulatorOptions{
+			Delay: time.Hour,
+			Max:   0,
+			Flush: func(n int) {
+				total = n
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -289,10 +310,12 @@ func TestAccumulator_EmptyTimerReset(t *testing.T) {
 
 	_, err := NewAccumulator(
 		ctx,
-		10*time.Millisecond,
-		0,
-		func(int) {
-			calls++
+		AccumulatorOptions{
+			Delay: 10 * time.Millisecond,
+			Max:   0,
+			Flush: func(int) {
+				calls++
+			},
 		},
 	)
 	test.NoError(t, err)
@@ -311,10 +334,12 @@ func TestAccumulator_CloseAfterTimerFired(t *testing.T) {
 
 	a, err := NewAccumulator(
 		ctx,
-		10*time.Millisecond,
-		0,
-		func(int) {
-			done <- struct{}{}
+		AccumulatorOptions{
+			Delay: 10 * time.Millisecond,
+			Max:   0,
+			Flush: func(int) {
+				done <- struct{}{}
+			},
 		},
 	)
 	test.NoError(t, err)

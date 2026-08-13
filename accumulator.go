@@ -7,6 +7,19 @@ import (
 	"time"
 )
 
+// AccumulatorOptions configures an Accumulator.
+type AccumulatorOptions struct {
+	// Delay is the interval between time-based flushes.
+	Delay time.Duration
+
+	// Max is the accumulated value that triggers a flush. A value of zero
+	// disables threshold-based flushing.
+	Max int
+
+	// Flush is called with the accumulated total when a flush occurs.
+	Flush func(total int)
+}
+
 // Accumulator accumulates values and invokes a callback when either:
 //   - the total reaches or exceeds max (if max > 0)
 //   - each delay interval elapses and total > 0
@@ -25,27 +38,22 @@ type Accumulator struct {
 
 // NewAccumulator creates a new Accumulator.
 // A max of zero disables threshold-based flushing.
-func NewAccumulator(
-	ctx context.Context,
-	delay time.Duration,
-	max int,
-	fn func(total int),
-) (*Accumulator, error) {
-	if delay <= 0 {
+func NewAccumulator(ctx context.Context, opts AccumulatorOptions) (*Accumulator, error) {
+	if opts.Delay <= 0 {
 		return nil, errors.New("delay must be greater than zero")
 	}
-	if max < 0 {
+	if opts.Max < 0 {
 		return nil, errors.New("max must not be negative")
 	}
-	if fn == nil {
+	if opts.Flush == nil {
 		return nil, errors.New("fn must not be nil")
 	}
 
 	a := &Accumulator{
-		delay: delay,
-		fn:    fn,
-		max:   max,
-		timer: time.NewTimer(delay),
+		delay: opts.Delay,
+		fn:    opts.Flush,
+		max:   opts.Max,
+		timer: time.NewTimer(opts.Delay),
 	}
 
 	go a.run(ctx)

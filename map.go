@@ -2,20 +2,20 @@ package gx
 
 import "sync"
 
-// Map is a concurrency-safe map of key-value pairs
+// Map is a concurrency-safe map of key-value pairs.
 type Map[K comparable, V any] struct {
 	m  map[K]V
 	mu sync.RWMutex
 }
 
-// NewMap returns an empty map
+// NewMap returns an empty map.
 func NewMap[K comparable, V any]() *Map[K, V] {
 	return &Map[K, V]{
 		m: make(map[K]V),
 	}
 }
 
-// Clear removes all key-value pairs from the map
+// Clear removes all key-value pairs from the map.
 func (m *Map[K, V]) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -23,8 +23,8 @@ func (m *Map[K, V]) Clear() {
 	clear(m.m)
 }
 
-// Get returns the value associated with key
-// the returned bool is true if the key was present
+// Get returns the value associated with key.
+// The returned bool is true if the key was present.
 func (m *Map[K, V]) Get(key K) (V, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -33,8 +33,8 @@ func (m *Map[K, V]) Get(key K) (V, bool) {
 	return v, ok
 }
 
-// GetAndRemove removes key from the map and returns its value
-// the returned bool is true if the key was present
+// GetAndRemove removes key from the map and returns its value.
+// The returned bool is true if the key was present.
 func (m *Map[K, V]) GetAndRemove(key K) (V, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -49,9 +49,9 @@ func (m *Map[K, V]) GetAndRemove(key K) (V, bool) {
 	return v, true
 }
 
-// GetOrSet returns the value associated with key if present
-// otherwise, it associates value with key and returns it
-// the returned bool is true if the key was present
+// GetOrSet returns the value associated with key if present.
+// Otherwise, it associates value with key and returns it.
+// The returned bool is true if the key was present.
 func (m *Map[K, V]) GetOrSet(key K, value V) (V, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -64,7 +64,7 @@ func (m *Map[K, V]) GetOrSet(key K, value V) (V, bool) {
 	return value, false
 }
 
-// Has returns true if the key is present in the map
+// Has returns true if the key is present in the map.
 func (m *Map[K, V]) Has(key K) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -73,8 +73,8 @@ func (m *Map[K, V]) Has(key K) bool {
 	return ok
 }
 
-// Keys returns the keys in the map
-// the order is unspecified
+// Keys returns the keys in the map.
+// The order is unspecified.
 func (m *Map[K, V]) Keys() []K {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -87,7 +87,7 @@ func (m *Map[K, V]) Keys() []K {
 	return keys
 }
 
-// Len returns the number of key-value pairs in the map
+// Len returns the number of key-value pairs in the map.
 func (m *Map[K, V]) Len() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -95,8 +95,8 @@ func (m *Map[K, V]) Len() int {
 	return len(m.m)
 }
 
-// Remove removes key from the map
-// returns true if the key was present
+// Remove removes key from the map.
+// Returns true if the key was present.
 func (m *Map[K, V]) Remove(key K) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -109,7 +109,7 @@ func (m *Map[K, V]) Remove(key K) bool {
 	return true
 }
 
-// Set associates value with key
+// Set associates value with key.
 func (m *Map[K, V]) Set(key K, value V) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -117,8 +117,8 @@ func (m *Map[K, V]) Set(key K, value V) {
 	m.m[key] = value
 }
 
-// Values returns the values in the map
-// the order is unspecified
+// Values returns the values in the map.
+// The order is unspecified.
 func (m *Map[K, V]) Values() []V {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

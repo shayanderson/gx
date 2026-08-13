@@ -1,6 +1,6 @@
 # gx
 
-`gx` is a collection of small, focused packages and types that complement Go's standard library. It provides functionality that feels like a natural extension of the standard library while remaining idiomatic and lightweight.
+`gx` is a collection of small, focused packages and types that complement Go's standard library. It provides functionality that feels like a natural extension of the standard library while remaining idiomatic, lightweight, and dependency-free.
 
 ## Installation
 
@@ -16,16 +16,41 @@ See the Go package documentation for complete APIs and examples. See tests for a
 
 ### gx
 
+- [`Accumulator`](#accumulator)
+- [`Debouncer`](#debouncer)
+- [`Map[K, V]`](#mapk-v)
+- [`Queue[T]`](#queuet)
+- [`Retry`](#retry)
+- [`Runner`](#runner)
+- [`Semaphore`](#semaphore)
+- [`Set[T]`](#sett)
+- [`Throttler`](#throttler)
+
 #### `Accumulator`
 
-Accumulates values and flushes on threshold or timeout.
+Accumulates values and flushes every interval or at a threshold. Zero totals are not flushed.
 
 ```go
-a := gx.NewAccumulator(ctx, time.Second, 100, func(total int) {
-    fmt.Println(total)
+a, err := gx.NewAccumulator(ctx, gx.AccumulatorOptions{
+    Delay: 1*time.Second,
+    Max:   100,
+    Flush: func(total int) {
+        fmt.Println(total)
+    },
 })
 a.Add(25)
 a.Add(75) // flushes
+```
+
+#### `Debouncer`
+
+Delays execution until no new calls occur within the configured interval.
+
+```go
+d := gx.NewDebouncer(250 * time.Millisecond)
+d.Do(func() {
+    save()
+})
 ```
 
 #### `Map[K, V]`
@@ -35,7 +60,7 @@ Generic concurrency-safe map.
 ```go
 m := gx.NewMap[string, int]()
 m.Set("count", 1)
-count, _ := m.Get("count")
+count, ok := m.Get("count")
 ```
 
 #### `Queue[T]`
@@ -47,9 +72,30 @@ worker := func(ctx context.Context, item int) error {
     fmt.Println("processing:", item)
     return nil
 }
-q := gx.NewQueue(gx.JobQueueOptions[int]{Worker: worker})
+q := gx.NewQueue(gx.QueueOptions[int]{
+    Size: 128,
+    Worker: worker,
+    Workers: 2,
+})
 go q.Run(ctx) // start workers
-q.Push(42)
+ok := q.Push(42)
+```
+
+#### `Retry`
+
+Retries a function using a configurable delay and backoff.
+
+```go
+r, err := gx.NewRetry(gx.RetryOptions{
+    Attempts: 5,
+    Delay:    time.Second,
+    Backoff:  2, // optional exponential backoff
+    MaxDuration: 30 * time.Second,
+})
+
+err = r.Do(ctx, func(ctx context.Context) error {
+    return callAPI(ctx)
+})
 ```
 
 #### `Runner`
@@ -61,6 +107,21 @@ r, ctx := gx.NewRunner(ctx)
 r.Run(func() error { return work(ctx) })
 r.Run(func() error { return work2(ctx) })
 err := r.Wait()
+```
+
+#### `Semaphore`
+
+Limits concurrent access to a resource.
+
+```go
+sem := gx.NewSemaphore(4)
+
+if err := sem.Acquire(ctx); err != nil {
+    return err
+}
+defer sem.Release()
+
+work()
 ```
 
 #### `Set[T]`
