@@ -14,6 +14,12 @@ See the Go package documentation for complete APIs and examples. See tests for a
 
 ## Packages
 
+- [`gx`](#gx)
+- [`assert`](#assert)
+- [`env`](#env)
+- [`test`](#test)
+- [`web`](#web)
+
 ### gx
 
 - [`Accumulator`](#accumulator)
