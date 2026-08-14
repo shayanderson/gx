@@ -89,7 +89,7 @@ ok := q.Push(42)
 
 #### `Retry`
 
-Retries a function using a configurable delay and backoff.
+Retries a function using configurable limits, delay, and backoff. With no attempts or max duration, it retries until the context is done.
 
 ```go
 r, err := gx.NewRetry(gx.RetryOptions{

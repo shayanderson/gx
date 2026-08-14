@@ -42,7 +42,7 @@ func TestNewRetryInvalidOptions(t *testing.T) {
 			name: "max_duration",
 			opts: RetryOptions{Attempts: 1, Backoff: 1, MaxDuration: -time.Millisecond},
 		},
-		{name: "no_limit", opts: RetryOptions{Backoff: 1}},
+		{name: "unbounded_zero_delay", opts: RetryOptions{Backoff: 1}},
 	}
 
 	for _, tc := range cases {
@@ -274,6 +274,24 @@ func TestRetryDoMaxDurationPassesTimeoutContext(t *testing.T) {
 	})
 
 	test.NoError(t, err)
+}
+
+func TestRetryDoUnboundedUntilContextCanceled(t *testing.T) {
+	r, err := NewRetry(RetryOptions{Delay: time.Millisecond})
+	test.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	calls := 0
+
+	err = r.Do(ctx, func(context.Context) error {
+		calls++
+		if calls == 3 {
+			cancel()
+		}
+		return errors.New("failed")
+	})
+
+	test.Error(t, err, context.Canceled)
+	test.Equal(t, 3, calls)
 }
 
 func TestRetryDoParentContextDeadlineWins(t *testing.T) {

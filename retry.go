@@ -33,7 +33,7 @@ type RetryOptions struct {
 	MaxDuration time.Duration
 }
 
-// Retry retries a function using a configurable delay and backoff.
+// Retry retries a function using configurable limits, delay, and backoff.
 type Retry struct {
 	attempts    int
 	backoff     float64
@@ -59,8 +59,8 @@ func NewRetry(opts RetryOptions) (*Retry, error) {
 	if opts.MaxDuration < 0 {
 		return nil, errors.New("max duration must not be negative")
 	}
-	if opts.Attempts == 0 && opts.MaxDuration == 0 {
-		return nil, errors.New("attempts or max duration must be greater than zero")
+	if opts.Attempts == 0 && opts.MaxDuration == 0 && opts.Delay == 0 {
+		return nil, errors.New("delay is required for unbounded retries")
 	}
 
 	backoff := opts.Backoff
@@ -77,8 +77,9 @@ func NewRetry(opts RetryOptions) (*Retry, error) {
 	}, nil
 }
 
-// Do executes fn until it succeeds, the maximum number of attempts is
-// reached, the retry context is done, or MaxDuration is exceeded.
+// Do executes fn until it succeeds, the maximum number of attempts is reached,
+// the retry context is done, or MaxDuration is exceeded. If Attempts and
+// MaxDuration are both zero, retries continue until fn succeeds or ctx is done.
 // It returns nil on success, the retry context error when canceled or
 // timed out, or the last error returned by fn when the attempt limit is reached.
 func (r *Retry) Do(ctx context.Context, fn RetryFunc) error {
