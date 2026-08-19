@@ -23,6 +23,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 ### gx
 
 - [`Accumulator`](#accumulator)
+- [`Bus`](#bus)
 - [`Debouncer`](#debouncer)
 - [`Dispatcher`](#dispatcher)
 - [`Map[K, V]`](#mapk-v)
@@ -49,6 +50,18 @@ a.Add(25)
 a.Add(75) // flushes
 ```
 
+#### `Bus`
+
+Publishes typed values asynchronously to registered subscribers. Use `Bus` when subscribers should run asynchronously from the publisher.
+
+```go
+b := gx.NewBus(4)
+b.Subscribe(func(ctx context.Context, value string) {
+    fmt.Println(value)
+})
+b.Publish(ctx, "hello")
+```
+
 #### `Debouncer`
 
 Delays execution until no new calls occur within the configured interval.
@@ -62,7 +75,7 @@ d.Do(func() {
 
 #### `Dispatcher`
 
-Dispatches typed values to registered handlers.
+Dispatches typed values to registered handlers. Use `Dispatcher` when handlers should run synchronously with the caller.
 
 ```go
 d := gx.NewDispatcher()
@@ -70,7 +83,6 @@ d.Register(func(ctx context.Context, value string) error {
     fmt.Println(value)
     return nil
 })
-
 err := d.Dispatch(ctx, "hello")
 ```
 
@@ -162,7 +174,6 @@ r, err := gx.NewRetry(gx.RetryOptions{
     Backoff:  2, // optional exponential backoff
     MaxDuration: 30 * time.Second,
 })
-
 err = r.Do(ctx, func(ctx context.Context) error {
     return callAPI(ctx)
 })
