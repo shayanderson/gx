@@ -24,6 +24,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 
 - [`Accumulator`](#accumulator)
 - [`Debouncer`](#debouncer)
+- [`Dispatcher`](#dispatcher)
 - [`Map[K, V]`](#mapk-v)
 - [`Queue[T]`](#queuet)
 - [`Retry`](#retry)
@@ -59,6 +60,70 @@ d.Do(func() {
 })
 ```
 
+#### `Dispatcher`
+
+Dispatches typed values to registered handlers.
+
+```go
+d := gx.NewDispatcher()
+d.Register(func(ctx context.Context, value string) error {
+    fmt.Println(value)
+    return nil
+})
+
+err := d.Dispatch(ctx, "hello")
+```
+
+<details>
+<summary>Buffered event dispatching with Queue[T]</summary>
+
+```go
+type Event interface {
+    dispatch(context.Context, *gx.Dispatcher) error
+}
+
+type UserCreated struct {
+    UserID string
+}
+
+func (e UserCreated) dispatch(ctx context.Context, d *gx.Dispatcher) error {
+    return d.Dispatch(ctx, e)
+}
+
+type InvoicePaid struct {
+    InvoiceID string
+}
+
+func (e InvoicePaid) dispatch(ctx context.Context, d *gx.Dispatcher) error {
+    return d.Dispatch(ctx, e)
+}
+
+d := gx.NewDispatcher()
+d.Register(func(ctx context.Context, e UserCreated) error {
+    fmt.Println("user created:", e.UserID)
+    return nil
+})
+d.Register(func(ctx context.Context, e InvoicePaid) error {
+    fmt.Println("invoice paid:", e.InvoiceID)
+    return nil
+})
+
+q := gx.NewQueue(gx.QueueOptions[Event]{
+    Worker: func(ctx context.Context, e Event) error {
+        // Dispatch through the concrete event type so Dispatcher
+        // can resolve the correct handler.
+        return e.dispatch(ctx, d)
+    },
+})
+
+go q.Run(ctx)
+
+q.Push(UserCreated{UserID: "user_123"})
+q.Push(InvoicePaid{InvoiceID: "inv_123"})
+```
+
+</details>
+
 #### `Map[K, V]`
 
 Generic concurrency-safe map.
@@ -93,7 +158,6 @@ Retries a function using configurable limits, delay, and backoff. With no attemp
 
 ```go
 r, err := gx.NewRetry(gx.RetryOptions{
-    Attempts: 5,
     Delay:    time.Second,
     Backoff:  2, // optional exponential backoff
     MaxDuration: 30 * time.Second,

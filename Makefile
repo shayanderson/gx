@@ -15,7 +15,7 @@ test: ## Run tests
 
 .PHONY: test-bench
 test-bench: ## Run tests with benchmarks
-	go test -bench=. -benchmem ./...
+	go test -run '^$$' -bench '^Benchmark' -benchmem ./...
 
 .PHONY: test-cover
 test-cover: ## Run tests with coverage
