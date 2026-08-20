@@ -60,9 +60,9 @@ b := gx.NewBuffer[string](16)
 b.Push("one")
 b.Push("two")
 
-// Block until values are available or the buffer is closed.
 go func() {
     for {
+        // Block until values are available or the buffer is closed.
         value, ok := b.Next()
         if !ok {
             return
