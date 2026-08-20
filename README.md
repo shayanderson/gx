@@ -23,6 +23,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 ### gx
 
 - [`Accumulator`](#accumulator)
+- [`Buffer[T]`](#buffert)
 - [`Bus`](#bus)
 - [`Debouncer`](#debouncer)
 - [`Dispatcher`](#dispatcher)
@@ -48,6 +49,38 @@ a, err := gx.NewAccumulator(ctx, gx.AccumulatorOptions{
 })
 a.Add(25)
 a.Add(75) // flushes
+```
+
+#### `Buffer[T]`
+
+Concurrency-safe, dynamically growing FIFO buffer.
+
+```go
+b := gx.NewBuffer[string](16)
+b.Push("one")
+b.Push("two")
+
+// Block until values are available or the buffer is closed.
+go func() {
+    for {
+        value, ok := b.Next()
+        if !ok {
+            return
+        }
+        fmt.Println(value)
+    }
+}()
+
+b.Push("three")
+b.Close()
+```
+
+Use `TryNext()` to read without blocking:
+
+```go
+if value, ok := b.TryNext(); ok {
+    fmt.Println(value)
+}
 ```
 
 #### `Bus`

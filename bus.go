@@ -18,15 +18,15 @@ type Bus struct {
 }
 
 // NewBus creates a new Bus with the specified maximum number of concurrent
-// publishes. If maxConcurrent is zero or negative, it defaults to 1.
-func NewBus(maxConcurrent int) *Bus {
-	if maxConcurrent <= 0 {
-		maxConcurrent = 1
+// publishes. If maxConcurrency is zero or negative, it defaults to 1.
+func NewBus(maxConcurrency int) *Bus {
+	if maxConcurrency <= 0 {
+		maxConcurrency = 1
 	}
 
 	return &Bus{
 		m:   make(map[reflect.Type][]any),
-		sem: make(chan struct{}, maxConcurrent),
+		sem: make(chan struct{}, maxConcurrency),
 	}
 }
 
