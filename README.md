@@ -33,6 +33,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 - [`Runner`](#runner)
 - [`Semaphore`](#semaphore)
 - [`Set[T]`](#sett)
+- [`Stack[T]`](#stackt)
 - [`Throttler`](#throttler)
 
 #### `Accumulator`
@@ -246,6 +247,38 @@ Generic concurrency-safe set.
 s := gx.NewSet("a", "b")
 s.Add("c")
 ok := s.Has("b")
+```
+
+#### `Stack[T]`
+
+Concurrency-safe, dynamically growing LIFO stack.
+
+```go
+s := gx.NewStack[string](16)
+s.Push("one")
+s.Push("two")
+
+go func() {
+    for {
+        // Block until values are available or the stack is closed.
+        value, ok := s.Pop()
+        if !ok {
+            return
+        }
+        fmt.Println(value)
+    }
+}()
+
+s.Push("three")
+s.Close()
+```
+
+Use `TryPop()` to read without blocking:
+
+```go
+if value, ok := s.TryPop(); ok {
+    fmt.Println(value)
+}
 ```
 
 #### `Throttler`
