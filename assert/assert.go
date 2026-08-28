@@ -30,7 +30,11 @@ func formatMsg(msgAndArgs ...any) string {
 // fail constructs a detailed error message including a stack trace and panics
 func fail(msg string, msgAndArgs ...any) {
 	var b strings.Builder
-	b.WriteString("assertion failed: " + msg + formatMsg(msgAndArgs...) + "\n\nstack trace:\n")
+
+	b.WriteString("assertion failed: ")
+	b.WriteString(msg)
+	b.WriteString(formatMsg(msgAndArgs...))
+	b.WriteString("\n\nstack trace:\n")
 
 	// skip first n frames until out of assert package
 	for i := 1; ; i++ {

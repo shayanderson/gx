@@ -40,7 +40,11 @@ func fail(t TestingT, msg string, msgAndArgs ...any) {
 	t.Helper()
 
 	var b strings.Builder
-	b.WriteString("assertion failed: " + msg + formatMsg(msgAndArgs...) + "\n\nstack trace:\n")
+
+	b.WriteString("assertion failed: ")
+	b.WriteString(msg)
+	b.WriteString(formatMsg(msgAndArgs...))
+	b.WriteString("\n\nstack trace:\n")
 
 	// skip first n frames until out of test package
 	for i := 1; ; i++ {

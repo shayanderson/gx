@@ -3,6 +3,7 @@ package test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -253,5 +254,19 @@ func TestFormatMsg(t *testing.T) {
 	expected = ": no details"
 	if msg != expected {
 		t.Fatalf("expected '%v' but got '%v'", expected, msg)
+	}
+}
+
+func TestFailMessage(t *testing.T) {
+	f := &fakeT{}
+
+	fail(f, "values differ", "expected %d", 42)
+
+	if !strings.Contains(f.msg, "assertion failed: values differ: expected 42") {
+		t.Fatalf("unexpected failure message: %s", f.msg)
+	}
+
+	if !strings.Contains(f.msg, "stack trace:") {
+		t.Fatalf("expected stack trace in failure message: %s", f.msg)
 	}
 }

@@ -89,11 +89,24 @@ if value, ok := b.TryNext(); ok {
 Publishes typed values asynchronously to registered subscribers. Use `Bus` when subscribers should run asynchronously from the publisher.
 
 ```go
+type UserLoggedIn struct {
+    UserID string
+}
+
+type UserLoggedOut struct {
+    UserID string
+}
+
 b := gx.NewBus(4)
-b.Subscribe(func(ctx context.Context, value string) {
-    fmt.Println(value)
+b.Subscribe(func(ctx context.Context, e UserLoggedIn) {
+    fmt.Println("user logged in:", e.UserID)
 })
-b.Publish(ctx, "hello")
+b.Subscribe(func(ctx context.Context, e UserLoggedOut) {
+    fmt.Println("user logged out:", e.UserID)
+})
+
+b.Publish(ctx, UserLoggedIn{UserID: "u123"})
+b.Publish(ctx, UserLoggedOut{UserID: "u123"})
 ```
 
 #### `Debouncer`
@@ -112,12 +125,26 @@ d.Do(func() {
 Dispatches typed values to registered handlers. Use `Dispatcher` when handlers should run synchronously with the caller.
 
 ```go
+type UserLoggedIn struct {
+    UserID string
+}
+
+type UserLoggedOut struct {
+    UserID string
+}
+
 d := gx.NewDispatcher()
-d.Register(func(ctx context.Context, value string) error {
-    fmt.Println(value)
+d.Register(func(ctx context.Context, e UserLoggedIn) error {
+    fmt.Println("user logged in:", e.UserID)
     return nil
 })
-err := d.Dispatch(ctx, "hello")
+d.Register(func(ctx context.Context, e UserLoggedOut) error {
+    fmt.Println("user logged out:", e.UserID)
+    return nil
+})
+
+err := d.Dispatch(ctx, UserLoggedIn{UserID: "u123"})
+err = d.Dispatch(ctx, UserLoggedOut{UserID: "u123"})
 ```
 
 <details>
@@ -128,29 +155,29 @@ type Event interface {
     dispatch(context.Context, *gx.Dispatcher) error
 }
 
-type UserCreated struct {
+type UserLoggedIn struct {
     UserID string
 }
 
-func (e UserCreated) dispatch(ctx context.Context, d *gx.Dispatcher) error {
+func (e UserLoggedIn) dispatch(ctx context.Context, d *gx.Dispatcher) error {
     return d.Dispatch(ctx, e)
 }
 
-type InvoicePaid struct {
-    InvoiceID string
+type UserLoggedOut struct {
+    UserID string
 }
 
-func (e InvoicePaid) dispatch(ctx context.Context, d *gx.Dispatcher) error {
+func (e UserLoggedOut) dispatch(ctx context.Context, d *gx.Dispatcher) error {
     return d.Dispatch(ctx, e)
 }
 
 d := gx.NewDispatcher()
-d.Register(func(ctx context.Context, e UserCreated) error {
-    fmt.Println("user created:", e.UserID)
+d.Register(func(ctx context.Context, e UserLoggedIn) error {
+    fmt.Println("user logged in:", e.UserID)
     return nil
 })
-d.Register(func(ctx context.Context, e InvoicePaid) error {
-    fmt.Println("invoice paid:", e.InvoiceID)
+d.Register(func(ctx context.Context, e UserLoggedOut) error {
+    fmt.Println("user logged out:", e.UserID)
     return nil
 })
 
@@ -164,8 +191,8 @@ q := gx.NewQueue(gx.QueueOptions[Event]{
 
 go q.Run(ctx)
 
-q.Push(UserCreated{UserID: "user_123"})
-q.Push(InvoicePaid{InvoiceID: "inv_123"})
+q.Push(UserLoggedIn{UserID: "u123"})
+q.Push(UserLoggedOut{UserID: "u123"})
 ```
 
 </details>
