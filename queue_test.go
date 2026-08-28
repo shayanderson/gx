@@ -79,6 +79,7 @@ func TestQueueFull(t *testing.T) {
 	test.True(t, q.Push(1))
 
 	test.False(t, q.Push(2))
+	test.False(t, q.Closed())
 }
 
 func TestQueueWorkerError(t *testing.T) {
@@ -136,7 +137,10 @@ func TestQueueClose(t *testing.T) {
 		},
 	})
 
+	test.False(t, q.Closed())
+
 	q.Close()
+	test.True(t, q.Closed())
 
 	err := q.Run(t.Context())
 
@@ -237,6 +241,7 @@ func TestQueuePushClosed(t *testing.T) {
 	q.Close()
 
 	test.False(t, q.Push(1))
+	test.True(t, q.Closed())
 }
 
 func TestQueueAlreadyRunning(t *testing.T) {

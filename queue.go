@@ -74,6 +74,14 @@ func (q *Queue[T]) Close() {
 	close(q.queue)
 }
 
+// Closed reports whether the queue has been closed.
+func (q *Queue[T]) Closed() bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	return q.closed
+}
+
 // Push adds an item to the queue.
 // Returns false if the queue is full or closed.
 func (q *Queue[T]) Push(item T) bool {
