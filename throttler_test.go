@@ -15,6 +15,16 @@ func TestThrottler_Allow_FirstCallAllowed(t *testing.T) {
 	test.True(t, th.Allow())
 }
 
+func TestThrottler_Allow_NonPositiveIntervalDisablesThrottling(t *testing.T) {
+	t.Parallel()
+
+	for _, interval := range []time.Duration{0, -time.Second} {
+		th := NewThrottler(interval)
+		test.True(t, th.Allow())
+		test.True(t, th.Allow())
+	}
+}
+
 func TestThrottler_Allow_ThrottledWithinInterval(t *testing.T) {
 	t.Parallel()
 	th := NewThrottler(200 * time.Millisecond)

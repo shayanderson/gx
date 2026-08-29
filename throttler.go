@@ -13,7 +13,8 @@ type Throttler struct {
 	mu       sync.Mutex
 }
 
-// NewThrottler creates a new Throttler with the specified interval.
+// NewThrottler creates a Throttler that allows at most one execution per
+// interval. A non-positive interval disables throttling.
 func NewThrottler(interval time.Duration) *Throttler {
 	return &Throttler{interval: interval}
 }

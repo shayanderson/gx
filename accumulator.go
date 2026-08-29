@@ -27,6 +27,7 @@ type AccumulatorOptions struct {
 // After either condition, the total is reset to zero.
 // Zero totals are not flushed.
 type Accumulator struct {
+	cancel context.CancelFunc
 	closed bool
 	delay  time.Duration
 	fn     func(total int)
@@ -49,11 +50,14 @@ func NewAccumulator(ctx context.Context, opts AccumulatorOptions) (*Accumulator,
 		return nil, errors.New("fn must not be nil")
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	a := &Accumulator{
-		delay: opts.Delay,
-		fn:    opts.Flush,
-		max:   opts.Max,
-		timer: time.NewTimer(opts.Delay),
+		cancel: cancel,
+		delay:  opts.Delay,
+		fn:     opts.Flush,
+		max:    opts.Max,
+		timer:  time.NewTimer(opts.Delay),
 	}
 
 	go a.run(ctx)
@@ -88,6 +92,7 @@ func (a *Accumulator) Close() {
 		return
 	}
 	a.closed = true
+	a.cancel()
 
 	// stop timer and drain channel if needed
 	if !a.timer.Stop() {

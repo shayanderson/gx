@@ -2,6 +2,7 @@ package gx
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -350,4 +351,28 @@ func TestAccumulator_CloseAfterTimerFired(t *testing.T) {
 
 	// timer has already fired and been drained by run()
 	a.Close()
+}
+
+// TestAccumulator_CloseStopsRunGoroutine guards against Close leaving run()'s
+// goroutine alive. Uses context.Background() on purpose: if Close doesn't
+// stop run() on its own, nothing else here ever will.
+func TestAccumulator_CloseStopsRunGoroutine(t *testing.T) {
+	before := runtime.NumGoroutine()
+
+	a, err := NewAccumulator(context.Background(), AccumulatorOptions{
+		Delay: time.Millisecond,
+		Max:   100,
+		Flush: func(int) {},
+	})
+	test.NoError(t, err)
+
+	a.Close()
+
+	// give run()'s goroutine a moment to see ctx.Done() and return
+	deadline := time.Now().Add(time.Second)
+	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+
+	test.LessOrEqual(t, runtime.NumGoroutine(), before)
 }

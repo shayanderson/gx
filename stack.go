@@ -2,9 +2,6 @@ package gx
 
 import "sync"
 
-// TODO: docs
-// TODO: tests
-
 // Stack is a concurrency-safe, dynamically growing LIFO stack.
 type Stack[T any] struct {
 	closed bool

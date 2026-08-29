@@ -86,7 +86,7 @@ if value, ok := b.TryNext(); ok {
 
 #### `Bus`
 
-Publishes typed values asynchronously to registered subscribers. Use `Bus` when subscribers should run asynchronously from the publisher.
+Publishes typed values asynchronously to registered subscribers. Use `Bus` when subscribers should run asynchronously from the publisher. `Publish` panics if no subscribers are registered for the published type.
 
 ```go
 type UserLoggedIn struct {
@@ -221,9 +221,18 @@ q := gx.NewQueue(gx.QueueOptions[int]{
     Worker: worker,
     Workers: 2,
 })
-go q.Run(ctx) // start workers
+
+go func() {
+    if err := q.Run(ctx); err != nil {
+        fmt.Println("queue error:", err)
+    }
+}()
+
 ok := q.Push(42)
+q.Close() // no more items; Run returns after processing 42
 ```
+
+`Run` blocks until the context is canceled, a worker returns an error, or all workers stop. After `Close`, workers process remaining buffered items and stop once the queue is empty, so `Run` returns `nil`.
 
 #### `Retry`
 
@@ -253,7 +262,7 @@ err := r.Wait()
 
 #### `Semaphore`
 
-Limits concurrent access to a resource.
+Limits concurrent access to a resource. Acquire blocks until a slot is available or the context is done.
 
 ```go
 sem := gx.NewSemaphore(4)
