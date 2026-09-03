@@ -3,6 +3,7 @@ package gx
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -80,6 +81,48 @@ func TestQueueFull(t *testing.T) {
 
 	test.False(t, q.Push(2))
 	test.False(t, q.Closed())
+}
+
+func TestQueueFailOnFull(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{})
+	var once sync.Once
+
+	q := NewQueue(QueueOptions[int]{
+		FailOnFull: true,
+		Size:       1,
+		Worker: func(ctx context.Context, _ int) error {
+			once.Do(func() { close(started) })
+			<-ctx.Done()
+			return nil
+		},
+	})
+
+	errs := make(chan error, 1)
+	go func() { errs <- q.Run(t.Context()) }()
+
+	test.True(t, q.Push(1))
+	<-started
+	test.True(t, q.Push(2))
+	test.False(t, q.Push(3))
+	test.True(t, errors.Is(<-errs, ErrQueueFull))
+}
+
+func TestQueueFailOnFullBeforeRun(t *testing.T) {
+	t.Parallel()
+
+	q := NewQueue(QueueOptions[int]{
+		FailOnFull: true,
+		Size:       1,
+		Worker:     func(context.Context, int) error { return nil },
+	})
+
+	test.True(t, q.Push(1))
+	test.False(t, q.Push(2))
+
+	q.Close()
+	test.NoError(t, q.Run(t.Context()))
 }
 
 func TestQueueWorkerError(t *testing.T) {
