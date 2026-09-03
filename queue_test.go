@@ -122,6 +122,21 @@ func TestQueueFailOnFullBeforeRun(t *testing.T) {
 	test.False(t, q.Push(2))
 
 	q.Close()
+	test.True(t, errors.Is(q.Run(t.Context()), ErrQueueFull))
+}
+
+func TestQueueFailOnFullDoesNotFailAfterClose(t *testing.T) {
+	t.Parallel()
+
+	q := NewQueue(QueueOptions[int]{
+		FailOnFull: true,
+		Size:       1,
+		Worker:     func(context.Context, int) error { return nil },
+	})
+
+	q.Close()
+
+	test.False(t, q.Push(1))
 	test.NoError(t, q.Run(t.Context()))
 }
 

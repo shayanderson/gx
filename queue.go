@@ -41,6 +41,7 @@ type Queue[T any] struct {
 	cancel     context.CancelCauseFunc
 	closed     bool
 	failOnFull bool
+	failure    error
 	mu         sync.RWMutex
 	queue      chan T
 	running    atomic.Bool
@@ -106,12 +107,11 @@ func (q *Queue[T]) Push(item T) bool {
 		q.mu.RUnlock()
 		return true
 	default:
-		cancel := q.cancel
 		failOnFull := q.failOnFull
 		q.mu.RUnlock()
 
-		if failOnFull && cancel != nil {
-			cancel(ErrQueueFull)
+		if failOnFull {
+			q.fail(ErrQueueFull)
 		}
 		return false
 	}
@@ -130,6 +130,13 @@ func (q *Queue[T]) Run(ctx context.Context) error {
 		q.mu.Unlock()
 		cancel(nil)
 		return ErrQueueAlreadyRunning
+	}
+	if q.failure != nil {
+		err := q.failure
+		q.running.Store(false)
+		q.mu.Unlock()
+		cancel(nil)
+		return err
 	}
 	q.cancel = cancel
 	q.mu.Unlock()
@@ -172,4 +179,25 @@ func (q *Queue[T]) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// fail sets the queue's failure state, if unset, and cancels the context if the queue is running.
+func (q *Queue[T]) fail(err error) {
+	if err == nil {
+		return
+	}
+
+	q.mu.Lock()
+	if q.failure != nil {
+		q.mu.Unlock()
+		return
+	}
+
+	q.failure = err
+	cancel := q.cancel
+	q.mu.Unlock()
+
+	if cancel != nil {
+		cancel(err)
+	}
 }
