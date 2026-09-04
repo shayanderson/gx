@@ -10,6 +10,8 @@ import (
 )
 
 func TestError(t *testing.T) {
+	t.Parallel()
+
 	err := web.Error(http.StatusBadRequest, "bad request")
 
 	test.Equal(t, "bad request", err.Error())
@@ -17,6 +19,8 @@ func TestError(t *testing.T) {
 }
 
 func TestErrorf(t *testing.T) {
+	t.Parallel()
+
 	err := web.Errorf(http.StatusNotFound, "missing %s", "user")
 
 	test.Equal(t, "missing user", err.Error())
@@ -24,6 +28,8 @@ func TestErrorf(t *testing.T) {
 }
 
 func TestErrorWrap(t *testing.T) {
+	t.Parallel()
+
 	baseErr := errors.New("failed")
 	err := web.ErrorWrap(http.StatusInternalServerError, baseErr)
 
@@ -33,6 +39,8 @@ func TestErrorWrap(t *testing.T) {
 }
 
 func TestErrorWrapNil(t *testing.T) {
+	t.Parallel()
+
 	err := web.ErrorWrap(http.StatusInternalServerError, nil)
 
 	test.Nil(t, err)

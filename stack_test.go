@@ -10,6 +10,8 @@ import (
 )
 
 func TestStackPushTryPop(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[int](2)
 
 	test.Equal(t, 0, s.Len())
@@ -29,6 +31,8 @@ func TestStackPushTryPop(t *testing.T) {
 }
 
 func TestStackTryPopEmpty(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[string](1)
 
 	value, ok := s.TryPop()
@@ -38,6 +42,8 @@ func TestStackTryPopEmpty(t *testing.T) {
 }
 
 func TestStackGrowsAndPreservesOrder(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[int](2)
 
 	test.True(t, s.Push(1))
@@ -56,6 +62,8 @@ func TestStackGrowsAndPreservesOrder(t *testing.T) {
 }
 
 func TestStackPopBlocksUntilPush(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[string](1)
 	values := make(chan string, 1)
 
@@ -77,6 +85,8 @@ func TestStackPopBlocksUntilPush(t *testing.T) {
 }
 
 func TestStackCloseDrainsValues(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[int](1)
 
 	test.True(t, s.Push(1))
@@ -97,6 +107,8 @@ func TestStackCloseDrainsValues(t *testing.T) {
 }
 
 func TestStackCloseWakesPop(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[int](1)
 	done := make(chan bool, 1)
 
@@ -111,6 +123,8 @@ func TestStackCloseWakesPop(t *testing.T) {
 }
 
 func TestStackPushClosed(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[int](0)
 
 	s.Close()
@@ -121,6 +135,8 @@ func TestStackPushClosed(t *testing.T) {
 }
 
 func TestStackConcurrent(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewStack[int](1)
 
 	const producers = 4

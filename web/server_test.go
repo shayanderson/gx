@@ -14,6 +14,8 @@ import (
 )
 
 func TestNewServer(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{Addr: ":0"})
 
 	test.Equal(t, ":0", s.opts.Addr)
@@ -25,6 +27,8 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestNewServerPreservesOptions(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{
 		Addr:              ":1234",
 		CertFile:          "cert.pem",
@@ -45,12 +49,16 @@ func TestNewServerPreservesOptions(t *testing.T) {
 }
 
 func TestServerMux(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{Addr: ":0"})
 
 	test.Same(t, s.mux, s.Mux())
 }
 
 func TestServerHandle(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{Addr: ":0"})
 	s.Handle("GET /hello", func(c *Context) error {
 		return c.String("hello")
@@ -65,6 +73,8 @@ func TestServerHandle(t *testing.T) {
 }
 
 func TestServerMethodHelpers(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		method string
@@ -109,6 +119,8 @@ func TestServerMethodHelpers(t *testing.T) {
 }
 
 func TestServerUse(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{Addr: ":0"})
 	mw := func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
@@ -123,6 +135,8 @@ func TestServerUse(t *testing.T) {
 }
 
 func TestChain(t *testing.T) {
+	t.Parallel()
+
 	called := make([]string, 0)
 	h := chain(func(c *Context) error {
 		called = append(called, "handler")
@@ -147,6 +161,8 @@ func TestChain(t *testing.T) {
 }
 
 func TestHandlerFuncServe(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	h := HandlerFunc(func(c *Context) error {
@@ -156,10 +172,12 @@ func TestHandlerFuncServe(t *testing.T) {
 	h.Serve(c)
 
 	test.Equal(t, http.StatusAccepted, rr.Code)
-	test.Equal(t, `{"ok":"true"}`+"\n", rr.Body.String())
+	test.Equal(t, `{"ok":"true"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeStatusError(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	h := HandlerFunc(func(c *Context) error {
@@ -169,10 +187,12 @@ func TestHandlerFuncServeStatusError(t *testing.T) {
 	h.Serve(c)
 
 	test.Equal(t, http.StatusTeapot, rr.Code)
-	test.Equal(t, `{"error":"short and stout"}`+"\n", rr.Body.String())
+	test.Equal(t, `{"error":"short and stout"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeErrorDefaultsToInternalServerError(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	h := HandlerFunc(func(c *Context) error {
@@ -182,10 +202,12 @@ func TestHandlerFuncServeErrorDefaultsToInternalServerError(t *testing.T) {
 	h.Serve(c)
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
-	test.Equal(t, `{"error":"failed"}`+"\n", rr.Body.String())
+	test.Equal(t, `{"error":"failed"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeInvalidStatusErrorDefaultsToInternalServerError(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	h := HandlerFunc(func(c *Context) error {
@@ -195,10 +217,12 @@ func TestHandlerFuncServeInvalidStatusErrorDefaultsToInternalServerError(t *test
 	h.Serve(c)
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
-	test.Equal(t, `{"error":"bad status"}`+"\n", rr.Body.String())
+	test.Equal(t, `{"error":"bad status"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServePanicsWhenErrorResponseWriteFails(t *testing.T) {
+	t.Parallel()
+
 	c := NewContext(
 		&failingWriter{header: make(http.Header)},
 		httptest.NewRequest(http.MethodGet, "/", nil),
@@ -233,6 +257,8 @@ func TestHandlerFuncServeCustomErrorHandler(t *testing.T) {
 }
 
 func TestHandlerFuncServeHTTP(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	h := HandlerFunc(func(c *Context) error {
@@ -246,6 +272,8 @@ func TestHandlerFuncServeHTTP(t *testing.T) {
 }
 
 func TestServerStart(t *testing.T) {
+	t.Parallel()
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	test.NoError(t, err)
 	addr := ln.Addr().String()
@@ -288,6 +316,8 @@ func TestServerStart(t *testing.T) {
 }
 
 func TestServerStartTLSReturnsError(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{
 		Addr:        "127.0.0.1:0",
 		CertFile:    "missing-cert.pem",
@@ -301,6 +331,8 @@ func TestServerStartTLSReturnsError(t *testing.T) {
 }
 
 func TestServerStop(t *testing.T) {
+	t.Parallel()
+
 	s := NewServer(Options{Addr: ":0"})
 
 	err := s.Stop()

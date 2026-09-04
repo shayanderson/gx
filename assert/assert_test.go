@@ -31,16 +31,22 @@ func panics(t *testing.T, f func()) {
 }
 
 func TestEmpty(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { Empty("") })
 	panics(t, func() { Empty("not empty") })
 }
 
 func TestEqual(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { Equal(5, 5) })
 	panics(t, func() { Equal(5, 6) })
 }
 
 func TestError(t *testing.T) {
+	t.Parallel()
+
 	e1 := errors.New("a")
 	e2 := errors.New("a")
 	e3 := errors.New("b")
@@ -54,11 +60,15 @@ func TestError(t *testing.T) {
 }
 
 func TestFalse(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { False(false) })
 	panics(t, func() { False(true) })
 }
 
 func TestGreaterAndGreaterOrEqual(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { Greater(5, 1) })
 	panics(t, func() { Greater(1, 5) })
 	noPanic(t, func() { GreaterOrEqual(5, 5) })
@@ -66,6 +76,8 @@ func TestGreaterAndGreaterOrEqual(t *testing.T) {
 }
 
 func TestLessAndLessOrEqual(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { Less(1, 5) })
 	panics(t, func() { Less(5, 1) })
 	noPanic(t, func() { LessOrEqual(5, 5) })
@@ -73,12 +85,16 @@ func TestLessAndLessOrEqual(t *testing.T) {
 }
 
 func TestLen(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { Len([]int{1, 2, 3}, 3) })
 	panics(t, func() { Len([]int{1}, 2) })
 	panics(t, func() { Len(123, 1) }) // invalid type
 }
 
 func TestNilAndNotNil(t *testing.T) {
+	t.Parallel()
+
 	var ptr *int
 	var m map[string]int
 	var s []string
@@ -96,31 +112,43 @@ func TestNilAndNotNil(t *testing.T) {
 }
 
 func TestNoError(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { NoError(nil) })
 	panics(t, func() { NoError(errors.New("boom")) })
 }
 
 func TestNotEmpty(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { NotEmpty("ok") })
 	panics(t, func() { NotEmpty("") })
 }
 
 func TestNotEqual(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { NotEqual(1, 2) })
 	panics(t, func() { NotEqual(5, 5) })
 }
 
 func TestTrue(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { True(true) })
 	panics(t, func() { True(false) })
 }
 
 func TestType(t *testing.T) {
+	t.Parallel()
+
 	noPanic(t, func() { Type(1, 2) })
 	panics(t, func() { Type(1, "string") })
 }
 
 func TestFormatMsg(t *testing.T) {
+	t.Parallel()
+
 	expect := ": custom message: details here: 23"
 	result := formatMsg("custom message: %s: %d", "details here", 23)
 	if result != expect {

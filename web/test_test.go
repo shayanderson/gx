@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewTestServer(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 	defer ts.Stop()
 
@@ -19,6 +21,8 @@ func TestNewTestServer(t *testing.T) {
 }
 
 func TestTestServerURL(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 	defer ts.Stop()
 
@@ -29,6 +33,8 @@ func TestTestServerURL(t *testing.T) {
 }
 
 func TestTestServerStartAndStop(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 
 	test.NoError(t, ts.Start())
@@ -36,6 +42,8 @@ func TestTestServerStartAndStop(t *testing.T) {
 }
 
 func TestTestServerMux(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 	defer ts.Stop()
 
@@ -43,6 +51,8 @@ func TestTestServerMux(t *testing.T) {
 }
 
 func TestTestServerHandle(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 	defer ts.Stop()
 	ts.Handle("GET /hello", func(c *Context) error {
@@ -56,6 +66,8 @@ func TestTestServerHandle(t *testing.T) {
 }
 
 func TestTestServerMethodHelpers(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		method string
@@ -105,6 +117,8 @@ func TestTestServerMethodHelpers(t *testing.T) {
 }
 
 func TestTestServerRouteMiddleware(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 	defer ts.Stop()
 	ts.Get("/", func(c *Context) error {
@@ -123,6 +137,8 @@ func TestTestServerRouteMiddleware(t *testing.T) {
 }
 
 func TestTestServerUse(t *testing.T) {
+	t.Parallel()
+
 	ts := NewTestServer()
 	defer ts.Stop()
 	ts.Use(func(next HandlerFunc) HandlerFunc {

@@ -10,18 +10,24 @@ import (
 )
 
 func TestNewSemaphore(t *testing.T) {
+	t.Parallel()
+
 	s := NewSemaphore(2)
 
 	test.Equal(t, 2, cap(s.ch))
 }
 
 func TestNewSemaphoreDefaultSize(t *testing.T) {
+	t.Parallel()
+
 	s := NewSemaphore(0)
 
 	test.Equal(t, 1, cap(s.ch))
 }
 
 func TestSemaphoreAcquireAndRelease(t *testing.T) {
+	t.Parallel()
+
 	s := NewSemaphore(1)
 
 	test.NoError(t, s.Acquire(t.Context()))
@@ -34,6 +40,8 @@ func TestSemaphoreAcquireAndRelease(t *testing.T) {
 }
 
 func TestSemaphoreAcquireContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	s := NewSemaphore(1)
 	test.NoError(t, s.Acquire(t.Context()))
 	ctx, cancel := context.WithCancel(t.Context())
@@ -46,6 +54,8 @@ func TestSemaphoreAcquireContextCanceled(t *testing.T) {
 }
 
 func TestSemaphoreAcquireBlocksUntilRelease(t *testing.T) {
+	t.Parallel()
+
 	s := NewSemaphore(1)
 	test.NoError(t, s.Acquire(t.Context()))
 	acquired := make(chan struct{})
@@ -73,6 +83,8 @@ func TestSemaphoreAcquireBlocksUntilRelease(t *testing.T) {
 }
 
 func TestSemaphoreTryAcquire(t *testing.T) {
+	t.Parallel()
+
 	s := NewSemaphore(2)
 
 	test.True(t, s.TryAcquire())

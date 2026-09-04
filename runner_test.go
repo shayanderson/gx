@@ -10,6 +10,8 @@ import (
 )
 
 func TestRunner(t *testing.T) {
+	t.Parallel()
+
 	runner, ctx := NewRunner(t.Context())
 
 	done := make(chan struct{})
@@ -34,6 +36,8 @@ func TestRunner(t *testing.T) {
 }
 
 func TestRunnerError(t *testing.T) {
+	t.Parallel()
+
 	runner, ctx := NewRunner(t.Context())
 
 	errFirst := errors.New("first error")

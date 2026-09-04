@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewAccumulator_InvalidArgs(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	_, err := NewAccumulator(ctx, AccumulatorOptions{Max: 1, Flush: func(int) {}})
@@ -29,6 +31,8 @@ func TestNewAccumulator_InvalidArgs(t *testing.T) {
 }
 
 func TestAccumulator_Max(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -57,6 +61,8 @@ func TestAccumulator_Max(t *testing.T) {
 }
 
 func TestAccumulator_Delay(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -87,6 +93,8 @@ func TestAccumulator_Delay(t *testing.T) {
 }
 
 func TestAccumulator_Close(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -113,6 +121,8 @@ func TestAccumulator_Close(t *testing.T) {
 }
 
 func TestAccumulator_CloseEmpty(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -136,6 +146,8 @@ func TestAccumulator_CloseEmpty(t *testing.T) {
 }
 
 func TestAccumulator_CloseTwice(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -162,6 +174,8 @@ func TestAccumulator_CloseTwice(t *testing.T) {
 }
 
 func TestAccumulator_AddAfterClose(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -190,6 +204,8 @@ func TestAccumulator_AddAfterClose(t *testing.T) {
 }
 
 func TestAccumulator_FlushLockedZero(t *testing.T) {
+	t.Parallel()
+
 	a := &Accumulator{
 		fn: func(int) {
 			t.Fatal("should not be called")
@@ -202,6 +218,8 @@ func TestAccumulator_FlushLockedZero(t *testing.T) {
 }
 
 func TestAccumulator_TimerDoesNotReset(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -238,6 +256,8 @@ func TestAccumulator_TimerDoesNotReset(t *testing.T) {
 }
 
 func TestAccumulator_NoMax(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -278,6 +298,8 @@ func TestAccumulator_NoMax(t *testing.T) {
 }
 
 func TestAccumulator_NoMaxClose(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -304,6 +326,8 @@ func TestAccumulator_NoMaxClose(t *testing.T) {
 }
 
 func TestAccumulator_EmptyTimerReset(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -328,6 +352,8 @@ func TestAccumulator_EmptyTimerReset(t *testing.T) {
 }
 
 func TestAccumulator_CloseAfterTimerFired(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 

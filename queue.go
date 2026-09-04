@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 )
 
 var (
@@ -44,7 +43,7 @@ type Queue[T any] struct {
 	failure    error
 	mu         sync.RWMutex
 	queue      chan T
-	running    atomic.Bool
+	running    bool
 	worker     Worker[T]
 	workers    int
 }
@@ -107,10 +106,9 @@ func (q *Queue[T]) Push(item T) bool {
 		q.mu.RUnlock()
 		return true
 	default:
-		failOnFull := q.failOnFull
 		q.mu.RUnlock()
 
-		if failOnFull {
+		if q.failOnFull {
 			q.fail(ErrQueueFull)
 		}
 		return false
@@ -126,24 +124,26 @@ func (q *Queue[T]) Run(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancelCause(ctx)
 	q.mu.Lock()
-	if !q.running.CompareAndSwap(false, true) {
+	if q.running {
 		q.mu.Unlock()
 		cancel(nil)
 		return ErrQueueAlreadyRunning
 	}
+	q.running = true
 	if q.failure != nil {
 		err := q.failure
-		q.running.Store(false)
+		q.running = false
 		q.mu.Unlock()
 		cancel(nil)
 		return err
 	}
 	q.cancel = cancel
 	q.mu.Unlock()
+
 	defer func() {
 		q.mu.Lock()
 		q.cancel = nil
-		q.running.Store(false)
+		q.running = false
 		q.mu.Unlock()
 		cancel(nil)
 	}()

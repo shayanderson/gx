@@ -3,7 +3,8 @@ package web
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"errors"
 	"io"
 	"net"
@@ -87,13 +88,13 @@ func (c *Context) Bind(v any) error {
 	if !strings.HasPrefix(ct, "application/json") {
 		return Error(http.StatusBadRequest, "invalid content type, expected application/json")
 	}
-	var dec *json.Decoder
+
+	r := io.Reader(c.Request.Body)
 	if LimitReadSize > 0 {
-		dec = json.NewDecoder(io.LimitReader(c.Request.Body, LimitReadSize))
-	} else {
-		dec = json.NewDecoder(c.Request.Body)
+		r = io.LimitReader(r, LimitReadSize)
 	}
-	return dec.Decode(v)
+
+	return json.UnmarshalRead(r, v)
 }
 
 // Context returns the underlying context.Context
@@ -129,14 +130,15 @@ func (c *Context) HTML(s string, code ...int) error {
 func (c *Context) JSON(v any, code ...int) error {
 	w := c.Writer()
 	w.Header().Set("Content-Type", "application/json")
+
 	if len(code) > 0 {
 		c.Status(code[0])
 	}
-	enc := json.NewEncoder(w)
-	if pretty := c.Request.URL.Query().Has("pretty"); pretty {
-		enc.SetIndent("", "  ")
+
+	if c.Request.URL.Query().Has("pretty") {
+		return json.MarshalWrite(w, v, jsontext.WithIndent("  "))
 	}
-	return enc.Encode(v)
+	return json.MarshalWrite(w, v)
 }
 
 // middleware marks the context as being used in middleware

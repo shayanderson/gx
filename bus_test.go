@@ -10,6 +10,8 @@ import (
 )
 
 func TestBusPublish(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 	values := make(chan string, 1)
 
@@ -24,6 +26,8 @@ func TestBusPublish(t *testing.T) {
 }
 
 func TestBusDefaultMaxConcurrent(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(0)
 	values := make(chan string, 1)
 
@@ -37,6 +41,8 @@ func TestBusDefaultMaxConcurrent(t *testing.T) {
 }
 
 func TestBusMaxConcurrent(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 
 	started := make(chan string, 2)
@@ -64,6 +70,8 @@ func TestBusMaxConcurrent(t *testing.T) {
 }
 
 func TestBusPublishMultipleSubscribers(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 	values := make(chan string, 2)
 
@@ -84,6 +92,8 @@ func TestBusPublishMultipleSubscribers(t *testing.T) {
 }
 
 func TestBusPublishNoSubscribersPanics(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 
 	test.Panics(t, func() {
@@ -92,6 +102,8 @@ func TestBusPublishNoSubscribersPanics(t *testing.T) {
 }
 
 func TestBusSubscribeNilPanics(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 
 	test.Panics(t, func() {
@@ -100,6 +112,8 @@ func TestBusSubscribeNilPanics(t *testing.T) {
 }
 
 func TestBusUnsubscribe(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 	values := make(chan string, 1)
 
@@ -121,6 +135,8 @@ func TestBusUnsubscribe(t *testing.T) {
 }
 
 func TestBusPublishReturnsWhenContextDoneWaitingForSlot(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBus(1)
 	block := make(chan struct{})
 	started := make(chan string, 2)

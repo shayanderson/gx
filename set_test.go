@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewSet(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewSet("a", "b", "a")
 
 	test.Equal(t, 2, s.Len())
@@ -18,6 +20,8 @@ func TestNewSet(t *testing.T) {
 }
 
 func TestSetAdd(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewSet[int]()
 
 	test.True(t, s.Add(1))
@@ -27,6 +31,8 @@ func TestSetAdd(t *testing.T) {
 }
 
 func TestSetRemove(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewSet(1, 2)
 
 	test.True(t, s.Remove(1))
@@ -37,6 +43,8 @@ func TestSetRemove(t *testing.T) {
 }
 
 func TestSetClear(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewSet(1, 2, 3)
 
 	s.Clear()
@@ -47,7 +55,46 @@ func TestSetClear(t *testing.T) {
 	test.False(t, s.Has(3))
 }
 
+func TestSetClone(t *testing.T) {
+	t.Parallel()
+
+	s := gx.NewSet("a", "b")
+
+	clone := s.Clone()
+	test.Equal(t, 2, clone.Len())
+
+	test.True(t, clone.Remove("a"))
+	test.True(t, clone.Add("c"))
+
+	test.True(t, s.Has("a"))
+	test.True(t, s.Has("b"))
+	test.False(t, s.Has("c"))
+
+	test.True(t, s.Add("d"))
+	test.False(t, clone.Has("d"))
+}
+
+func TestSetCloneShallow(t *testing.T) {
+	t.Parallel()
+
+	value := 1
+
+	s := gx.NewSet(&value)
+	clone := s.Clone()
+
+	values := clone.Values()
+
+	test.Equal(t, &value, values[0])
+
+	*values[0] = 2
+
+	original := s.Values()
+	test.Equal(t, 2, *original[0])
+}
+
 func TestSetValues(t *testing.T) {
+	t.Parallel()
+
 	s := gx.NewSet("b", "a", "c", "a")
 
 	values := s.Values()

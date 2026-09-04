@@ -14,6 +14,8 @@ import (
 )
 
 func TestNewContext(t *testing.T) {
+	t.Parallel()
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
@@ -25,6 +27,8 @@ func TestNewContext(t *testing.T) {
 }
 
 func TestContextSetAndGet(t *testing.T) {
+	t.Parallel()
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	c := NewContext(httptest.NewRecorder(), req)
 
@@ -36,6 +40,8 @@ func TestContextSetAndGet(t *testing.T) {
 }
 
 func TestContextMiddleware(t *testing.T) {
+	t.Parallel()
+
 	c := NewContext(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	test.False(t, c.isMiddleware())
@@ -44,6 +50,8 @@ func TestContextMiddleware(t *testing.T) {
 }
 
 func TestContextBind(t *testing.T) {
+	t.Parallel()
+
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	c := NewContext(httptest.NewRecorder(), req)
@@ -58,6 +66,8 @@ func TestContextBind(t *testing.T) {
 }
 
 func TestContextBindInvalidContentType(t *testing.T) {
+	t.Parallel()
+
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
 	req.Header.Set("Content-Type", "text/plain")
 	c := NewContext(httptest.NewRecorder(), req)
@@ -71,6 +81,8 @@ func TestContextBindInvalidContentType(t *testing.T) {
 }
 
 func TestContextBindInvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{`))
 	req.Header.Set("Content-Type", "application/json")
 	c := NewContext(httptest.NewRecorder(), req)
@@ -113,6 +125,8 @@ func TestContextBindNoLimitReadSize(t *testing.T) {
 }
 
 func TestContextString(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -125,6 +139,8 @@ func TestContextString(t *testing.T) {
 }
 
 func TestContextHTML(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -137,6 +153,8 @@ func TestContextHTML(t *testing.T) {
 }
 
 func TestContextJSON(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -145,10 +163,12 @@ func TestContextJSON(t *testing.T) {
 	test.NoError(t, err)
 	test.Equal(t, http.StatusCreated, rr.Code)
 	test.Equal(t, "application/json", rr.Header().Get("Content-Type"))
-	test.Equal(t, `{"name":"shay"}`+"\n", rr.Body.String())
+	test.Equal(t, `{"name":"shay"}`, rr.Body.String())
 }
 
 func TestContextJSONPretty(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/?pretty", nil))
 
@@ -156,10 +176,12 @@ func TestContextJSONPretty(t *testing.T) {
 
 	test.NoError(t, err)
 	test.Equal(t, http.StatusOK, rr.Code)
-	test.Equal(t, "{\n  \"name\": \"shay\"\n}\n", rr.Body.String())
+	test.Equal(t, "{\n  \"name\": \"shay\"\n}", rr.Body.String())
 }
 
 func TestContextRedirect(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	c := NewContext(rr, req)
@@ -171,6 +193,8 @@ func TestContextRedirect(t *testing.T) {
 }
 
 func TestContextRedirectWithStatus(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	c := NewContext(rr, req)
@@ -182,6 +206,8 @@ func TestContextRedirectWithStatus(t *testing.T) {
 }
 
 func TestContextStatus(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -192,6 +218,8 @@ func TestContextStatus(t *testing.T) {
 }
 
 func TestContextWriterDefaultsToOKOnWrite(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -204,6 +232,8 @@ func TestContextWriterDefaultsToOKOnWrite(t *testing.T) {
 }
 
 func TestContextWriterWriteAfterStatus(t *testing.T) {
+	t.Parallel()
+
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -217,6 +247,8 @@ func TestContextWriterWriteAfterStatus(t *testing.T) {
 }
 
 func TestContextWriterFlush(t *testing.T) {
+	t.Parallel()
+
 	w := &interfaceWriter{}
 	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -226,6 +258,8 @@ func TestContextWriterFlush(t *testing.T) {
 }
 
 func TestContextWriterFlushUnsupported(t *testing.T) {
+	t.Parallel()
+
 	w := &basicWriter{header: make(http.Header)}
 	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -235,6 +269,8 @@ func TestContextWriterFlushUnsupported(t *testing.T) {
 }
 
 func TestContextWriterHijack(t *testing.T) {
+	t.Parallel()
+
 	w := &interfaceWriter{}
 	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -251,6 +287,8 @@ func TestContextWriterHijack(t *testing.T) {
 }
 
 func TestContextWriterHijackUnsupported(t *testing.T) {
+	t.Parallel()
+
 	c := NewContext(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	conn, rw, err := c.Writer().(http.Hijacker).Hijack()
@@ -261,6 +299,8 @@ func TestContextWriterHijackUnsupported(t *testing.T) {
 }
 
 func TestContextWriterPush(t *testing.T) {
+	t.Parallel()
+
 	w := &interfaceWriter{}
 	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -271,6 +311,8 @@ func TestContextWriterPush(t *testing.T) {
 }
 
 func TestContextWriterPushUnsupported(t *testing.T) {
+	t.Parallel()
+
 	c := NewContext(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	err := c.Writer().(http.Pusher).Push("/asset.css", nil)

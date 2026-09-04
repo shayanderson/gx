@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewRetry(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Attempts:    3,
 		Backoff:     2,
@@ -27,6 +29,8 @@ func TestNewRetry(t *testing.T) {
 }
 
 func TestNewRetryInvalidOptions(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		opts RetryOptions
@@ -56,6 +60,8 @@ func TestNewRetryInvalidOptions(t *testing.T) {
 }
 
 func TestRetryDoSuccess(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3})
 	test.NoError(t, err)
 	calls := 0
@@ -70,6 +76,8 @@ func TestRetryDoSuccess(t *testing.T) {
 }
 
 func TestNewRetryDefaultBackoff(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3})
 
 	test.NoError(t, err)
@@ -77,6 +85,8 @@ func TestNewRetryDefaultBackoff(t *testing.T) {
 }
 
 func TestRetryDoEventuallySucceeds(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3})
 	test.NoError(t, err)
 	failErr := errors.New("failed")
@@ -95,6 +105,8 @@ func TestRetryDoEventuallySucceeds(t *testing.T) {
 }
 
 func TestRetryDoReturnsLastError(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3})
 	test.NoError(t, err)
 	firstErr := errors.New("first")
@@ -114,6 +126,8 @@ func TestRetryDoReturnsLastError(t *testing.T) {
 }
 
 func TestRetryDoContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3, Delay: time.Second})
 	test.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -130,6 +144,8 @@ func TestRetryDoContextCanceled(t *testing.T) {
 }
 
 func TestRetryDoZeroDelay(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3, Backoff: 2})
 	test.NoError(t, err)
 	failErr := errors.New("failed")
@@ -145,6 +161,8 @@ func TestRetryDoZeroDelay(t *testing.T) {
 }
 
 func TestRetryDoMaxDelay(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Attempts: 3,
 		Backoff:  10,
@@ -167,6 +185,8 @@ func TestRetryDoMaxDelay(t *testing.T) {
 }
 
 func TestRetryDoBackoffIncreasesDelay(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Attempts: 4,
 		Backoff:  2,
@@ -188,6 +208,8 @@ func TestRetryDoBackoffIncreasesDelay(t *testing.T) {
 }
 
 func TestRetryDoAttemptsWinBeforeMaxDuration(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Attempts:    2,
 		Delay:       time.Millisecond,
@@ -207,6 +229,8 @@ func TestRetryDoAttemptsWinBeforeMaxDuration(t *testing.T) {
 }
 
 func TestRetryDoMaxDuration(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Attempts:    10,
 		Delay:       20 * time.Millisecond,
@@ -227,6 +251,8 @@ func TestRetryDoMaxDuration(t *testing.T) {
 }
 
 func TestRetryDoMaxDurationOnly(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Delay:       10 * time.Millisecond,
 		MaxDuration: 25 * time.Millisecond,
@@ -245,6 +271,8 @@ func TestRetryDoMaxDurationOnly(t *testing.T) {
 }
 
 func TestRetryDoMaxDurationStopsAfterSlowAttempt(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		Attempts:    10,
 		MaxDuration: 10 * time.Millisecond,
@@ -264,6 +292,8 @@ func TestRetryDoMaxDurationStopsAfterSlowAttempt(t *testing.T) {
 }
 
 func TestRetryDoMaxDurationPassesTimeoutContext(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Attempts: 3, MaxDuration: time.Second})
 	test.NoError(t, err)
 
@@ -277,6 +307,8 @@ func TestRetryDoMaxDurationPassesTimeoutContext(t *testing.T) {
 }
 
 func TestRetryDoUnboundedUntilContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{Delay: time.Millisecond})
 	test.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -295,6 +327,8 @@ func TestRetryDoUnboundedUntilContextCanceled(t *testing.T) {
 }
 
 func TestRetryDoParentContextDeadlineWins(t *testing.T) {
+	t.Parallel()
+
 	r, err := NewRetry(RetryOptions{
 		MaxDuration: time.Second,
 	})

@@ -9,18 +9,24 @@ import (
 )
 
 func TestNewDebouncer(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(25 * time.Millisecond)
 
 	test.Equal(t, 25*time.Millisecond, d.delay)
 }
 
 func TestNewDebouncerDefaultDelay(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(0)
 
 	test.Equal(t, 10*time.Millisecond, d.delay)
 }
 
 func TestDebouncerDo(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(10 * time.Millisecond)
 	done := make(chan struct{}, 1)
 
@@ -42,6 +48,8 @@ func TestDebouncerDo(t *testing.T) {
 }
 
 func TestDebouncerDoResetsTimer(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(20 * time.Millisecond)
 	var calls atomic.Int32
 	done := make(chan struct{}, 1)
@@ -72,6 +80,8 @@ func TestDebouncerDoResetsTimer(t *testing.T) {
 }
 
 func TestDebouncerCancel(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(10 * time.Millisecond)
 	var calls atomic.Int32
 
@@ -85,6 +95,8 @@ func TestDebouncerCancel(t *testing.T) {
 }
 
 func TestDebouncerCancelWithoutTimer(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(10 * time.Millisecond)
 
 	d.Cancel()
@@ -93,6 +105,8 @@ func TestDebouncerCancelWithoutTimer(t *testing.T) {
 }
 
 func TestDebouncerCancelAfterRun(t *testing.T) {
+	t.Parallel()
+
 	d := NewDebouncer(10 * time.Millisecond)
 	done := make(chan struct{}, 1)
 

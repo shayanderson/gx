@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewMap(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 
 	test.Equal(t, 0, m.Len())
@@ -16,6 +18,8 @@ func TestNewMap(t *testing.T) {
 }
 
 func TestMapSetAndGet(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 
 	m.Set("a", 1)
@@ -37,6 +41,8 @@ func TestMapSetAndGet(t *testing.T) {
 }
 
 func TestMapGetOrSet(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 
 	v, ok := m.GetOrSet("a", 1)
@@ -50,6 +56,8 @@ func TestMapGetOrSet(t *testing.T) {
 }
 
 func TestMapRemove(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 	m.Set("a", 1)
 	m.Set("b", 2)
@@ -62,6 +70,8 @@ func TestMapRemove(t *testing.T) {
 }
 
 func TestMapGetAndRemove(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 	m.Set("a", 1)
 
@@ -76,6 +86,8 @@ func TestMapGetAndRemove(t *testing.T) {
 }
 
 func TestMapClear(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 	m.Set("a", 1)
 	m.Set("b", 2)
@@ -87,7 +99,54 @@ func TestMapClear(t *testing.T) {
 	test.False(t, m.Has("b"))
 }
 
+func TestMapClone(t *testing.T) {
+	t.Parallel()
+
+	m := gx.NewMap[string, int]()
+	m.Set("a", 1)
+	m.Set("b", 2)
+
+	clone := m.Clone()
+	test.Equal(t, 2, clone.Len())
+
+	clone.Set("a", 3)
+	clone.Remove("b")
+	clone.Set("c", 4)
+
+	v, ok := m.Get("a")
+	test.True(t, ok)
+	test.Equal(t, 1, v)
+	test.True(t, m.Has("b"))
+	test.False(t, m.Has("c"))
+
+	m.Set("d", 5)
+	test.False(t, clone.Has("d"))
+}
+
+func TestMapCloneShallow(t *testing.T) {
+	t.Parallel()
+
+	value := 1
+
+	m := gx.NewMap[string, *int]()
+	m.Set("a", &value)
+
+	clone := m.Clone()
+
+	v, ok := clone.Get("a")
+	test.True(t, ok)
+	test.Equal(t, &value, v)
+
+	*v = 2
+
+	original, ok := m.Get("a")
+	test.True(t, ok)
+	test.Equal(t, 2, *original)
+}
+
 func TestMapKeys(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 	m.Set("b", 2)
 	m.Set("a", 1)
@@ -100,6 +159,8 @@ func TestMapKeys(t *testing.T) {
 }
 
 func TestMapValues(t *testing.T) {
+	t.Parallel()
+
 	m := gx.NewMap[string, int]()
 	m.Set("a", 2)
 	m.Set("b", 1)

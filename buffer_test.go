@@ -10,6 +10,8 @@ import (
 )
 
 func TestBufferPushTryNext(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[int](2)
 
 	test.Equal(t, 0, b.Len())
@@ -29,6 +31,8 @@ func TestBufferPushTryNext(t *testing.T) {
 }
 
 func TestBufferTryNextEmpty(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[string](1)
 
 	value, ok := b.TryNext()
@@ -38,6 +42,8 @@ func TestBufferTryNextEmpty(t *testing.T) {
 }
 
 func TestBufferGrowsAndPreservesOrder(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[int](2)
 
 	test.True(t, b.Push(1))
@@ -62,6 +68,8 @@ func TestBufferGrowsAndPreservesOrder(t *testing.T) {
 }
 
 func TestBufferNextBlocksUntilPush(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[string](1)
 	values := make(chan string, 1)
 
@@ -83,6 +91,8 @@ func TestBufferNextBlocksUntilPush(t *testing.T) {
 }
 
 func TestBufferCloseDrainsBufferedValues(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[int](1)
 
 	test.True(t, b.Push(1))
@@ -103,6 +113,8 @@ func TestBufferCloseDrainsBufferedValues(t *testing.T) {
 }
 
 func TestBufferCloseWakesNext(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[int](1)
 	done := make(chan bool, 1)
 
@@ -117,6 +129,8 @@ func TestBufferCloseWakesNext(t *testing.T) {
 }
 
 func TestBufferPushClosed(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[int](0)
 
 	b.Close()
@@ -141,6 +155,8 @@ func receiveBufferValue[T any](t *testing.T, ch <-chan T) T {
 }
 
 func TestBufferConcurrent(t *testing.T) {
+	t.Parallel()
+
 	b := gx.NewBuffer[int](1)
 
 	const producers = 4

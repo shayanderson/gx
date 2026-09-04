@@ -1,6 +1,9 @@
 package gx
 
-import "sync"
+import (
+	"maps"
+	"sync"
+)
 
 // Set is a concurrency-safe collection of unique values.
 type Set[T comparable] struct {
@@ -41,6 +44,16 @@ func (s *Set[T]) Clear() {
 	defer s.mu.Unlock()
 
 	clear(s.m)
+}
+
+// Clone returns a shallow copy of the set.
+func (s *Set[T]) Clone() *Set[T] {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return &Set[T]{
+		m: maps.Clone(s.m),
+	}
 }
 
 // Has returns true if v is in the set.

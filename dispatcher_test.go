@@ -12,6 +12,8 @@ import (
 )
 
 func TestDispatcherDispatch(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 	var values []string
 
@@ -35,6 +37,8 @@ func TestDispatcherDispatch(t *testing.T) {
 }
 
 func TestDispatcherDispatchError(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 	errStop := errors.New("stop")
 	var values []int
@@ -57,6 +61,8 @@ func TestDispatcherDispatchError(t *testing.T) {
 }
 
 func TestDispatcherDispatchNoHandler(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 
 	err := d.Dispatch(t.Context(), "missing")
@@ -66,6 +72,8 @@ func TestDispatcherDispatchNoHandler(t *testing.T) {
 }
 
 func TestDispatcherUnregister(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 	var values []string
 
@@ -89,6 +97,8 @@ func TestDispatcherUnregister(t *testing.T) {
 }
 
 func TestDispatcherUnregisterAll(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 
 	d.Register(func(context.Context, string) error { return nil })
@@ -101,6 +111,8 @@ func TestDispatcherUnregisterAll(t *testing.T) {
 }
 
 func TestDispatcherRegisterNilPanics(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 
 	test.Panics(t, func() {
@@ -109,6 +121,8 @@ func TestDispatcherRegisterNilPanics(t *testing.T) {
 }
 
 func TestDispatcherConcurrent(t *testing.T) {
+	t.Parallel()
+
 	d := gx.NewDispatcher()
 
 	var total atomic.Int32

@@ -41,6 +41,8 @@ func expectPass(t *testing.T, fn func(f *fakeT)) {
 }
 
 func TestContains(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Contains(f, "hello world", "world") })
 	expectFail(t, func(f *fakeT) { Contains(f, "hello", "nope") })
 
@@ -54,16 +56,22 @@ func TestContains(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Empty(f, "") })
 	expectFail(t, func(f *fakeT) { Empty(f, "x") })
 }
 
 func TestEqual(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Equal(f, 5, 5) })
 	expectFail(t, func(f *fakeT) { Equal(f, 5, 6) })
 }
 
 func TestError(t *testing.T) {
+	t.Parallel()
+
 	e1 := errors.New("a")
 	e2 := errors.New("a")
 	e3 := errors.New("b")
@@ -77,38 +85,52 @@ func TestError(t *testing.T) {
 }
 
 func TestFalse(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { False(f, false) })
 	expectFail(t, func(f *fakeT) { False(f, true) })
 }
 
 func TestGreater(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Greater(f, 5, 3) })
 	expectFail(t, func(f *fakeT) { Greater(f, 3, 5) })
 }
 
 func TestGreaterOrEqual(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { GreaterOrEqual(f, 5, 5) })
 	expectFail(t, func(f *fakeT) { GreaterOrEqual(f, 3, 5) })
 }
 
 func TestLen(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Len(f, []int{1, 2, 3}, 3) })
 	expectFail(t, func(f *fakeT) { Len(f, []int{1}, 2) })
 	expectFail(t, func(f *fakeT) { Len(f, 123, 1) })
 }
 
 func TestLess(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Less(f, 3, 5) })
 	expectFail(t, func(f *fakeT) { Less(f, 5, 3) })
 }
 
 func TestLessOrEqual(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { LessOrEqual(f, 3, 5) })
 	expectPass(t, func(f *fakeT) { LessOrEqual(f, 5, 5) })
 	expectFail(t, func(f *fakeT) { LessOrEqual(f, 6, 5) })
 }
 
 func TestNil(t *testing.T) {
+	t.Parallel()
+
 	var p *int
 	var m map[string]int
 	var s []string
@@ -123,21 +145,29 @@ func TestNil(t *testing.T) {
 }
 
 func TestNoError(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { NoError(f, nil) })
 	expectFail(t, func(f *fakeT) { NoError(f, errors.New("fail")) })
 }
 
 func TestNotEmpty(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { NotEmpty(f, "x") })
 	expectFail(t, func(f *fakeT) { NotEmpty(f, "") })
 }
 
 func TestNotEqual(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { NotEqual(f, 5, 6) })
 	expectFail(t, func(f *fakeT) { NotEqual(f, 5, 5) })
 }
 
 func TestNotNil(t *testing.T) {
+	t.Parallel()
+
 	var p *int
 	var m map[string]int
 	expectPass(t, func(f *fakeT) { NotNil(f, 1) })
@@ -147,11 +177,15 @@ func TestNotNil(t *testing.T) {
 }
 
 func TestPanics(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Panics(f, func() { panic("ok") }) })
 	expectFail(t, func(f *fakeT) { Panics(f, func() {}) })
 }
 
 func TestSame(t *testing.T) {
+	t.Parallel()
+
 	t.Run("same_pointer", func(t *testing.T) {
 		v := &struct{ X int }{X: 1}
 
@@ -234,16 +268,22 @@ func TestSame(t *testing.T) {
 }
 
 func TestTrue(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { True(f, true) })
 	expectFail(t, func(f *fakeT) { True(f, false) })
 }
 
 func TestType(t *testing.T) {
+	t.Parallel()
+
 	expectPass(t, func(f *fakeT) { Type(f, 1, 2) })
 	expectFail(t, func(f *fakeT) { Type(f, 1, "s") })
 }
 
 func TestFormatMsg(t *testing.T) {
+	t.Parallel()
+
 	msg := formatMsg("expected %v but got %v", 5, 6)
 	expected := ": expected 5 but got 6"
 	if msg != expected {
@@ -258,6 +298,8 @@ func TestFormatMsg(t *testing.T) {
 }
 
 func TestFailMessage(t *testing.T) {
+	t.Parallel()
+
 	f := &fakeT{}
 
 	fail(f, "values differ", "expected %d", 42)

@@ -1,6 +1,9 @@
 package gx
 
-import "sync"
+import (
+	"maps"
+	"sync"
+)
 
 // Map is a concurrency-safe map of key-value pairs.
 type Map[K comparable, V any] struct {
@@ -21,6 +24,16 @@ func (m *Map[K, V]) Clear() {
 	defer m.mu.Unlock()
 
 	clear(m.m)
+}
+
+// Clone returns a shallow copy of the map.
+func (m *Map[K, V]) Clone() *Map[K, V] {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return &Map[K, V]{
+		m: maps.Clone(m.m),
+	}
 }
 
 // Get returns the value associated with key.
