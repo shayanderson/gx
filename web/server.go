@@ -218,7 +218,6 @@ func (s *Server) Start() error {
 		h.Serve(c)
 	})
 
-	slog.Info("http server: starting", slog.String("addr", s.opts.Addr))
 	var err error
 	if s.opts.CertFile != "" && s.opts.CertKeyFile != "" {
 		err = s.server.ListenAndServeTLS(s.opts.CertFile, s.opts.CertKeyFile)
@@ -233,7 +232,6 @@ func (s *Server) Start() error {
 
 // Stop stops the HTTP server
 func (s *Server) Stop() error {
-	slog.Info("http server: stopping")
 	s.stopping.Store(true)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
