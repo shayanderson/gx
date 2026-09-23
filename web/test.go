@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 )
 
 // TestServer is a test HTTP server
@@ -24,8 +25,8 @@ func NewTestServer() *TestServer {
 			s.mux.ServeHTTP(c.Writer(), c.Request)
 			return nil
 		})
-		for i := len(s.middleware) - 1; i >= 0; i-- {
-			h = s.middleware[i](h)
+		for _, v := range slices.Backward(s.middleware) {
+			h = v(h)
 		}
 		h.ServeHTTP(w, r)
 	}))

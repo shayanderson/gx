@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sync/atomic"
 	"time"
 )
@@ -108,6 +109,12 @@ type Options struct {
 	// when keep-alive is enabled
 	IdleTimeout time.Duration
 
+	// MaxHeaderBytes is the maximum size of request headers.
+	MaxHeaderBytes int
+
+	// MaxHeaderValueCount is the maximum number of request header values.
+	MaxHeaderValueCount int
+
 	// ReadHeaderTimeout is the amount of time allowed to read request headers
 	ReadHeaderTimeout time.Duration
 
@@ -144,12 +151,14 @@ func NewServer(opts Options) *Server {
 		mux:  http.NewServeMux(),
 	}
 	s.server = &http.Server{
-		Addr:              opts.Addr,
-		Handler:           s.mux,
-		IdleTimeout:       opts.IdleTimeout,
-		ReadHeaderTimeout: opts.ReadHeaderTimeout,
-		ReadTimeout:       opts.ReadTimeout,
-		WriteTimeout:      opts.WriteTimeout,
+		Addr:                opts.Addr,
+		Handler:             s.mux,
+		IdleTimeout:         opts.IdleTimeout,
+		MaxHeaderBytes:      opts.MaxHeaderBytes,
+		MaxHeaderValueCount: opts.MaxHeaderValueCount,
+		ReadHeaderTimeout:   opts.ReadHeaderTimeout,
+		ReadTimeout:         opts.ReadTimeout,
+		WriteTimeout:        opts.WriteTimeout,
 	}
 	return s
 }
@@ -198,8 +207,8 @@ func (s *Server) Start() error {
 	})
 
 	// apply middleware
-	for i := len(s.middleware) - 1; i >= 0; i-- {
-		h = s.middleware[i](h)
+	for _, v := range slices.Backward(s.middleware) {
+		h = v(h)
 	}
 
 	// wrap base handler

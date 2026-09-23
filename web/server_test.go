@@ -30,22 +30,28 @@ func TestNewServerPreservesOptions(t *testing.T) {
 	t.Parallel()
 
 	s := NewServer(Options{
-		Addr:              ":1234",
-		CertFile:          "cert.pem",
-		CertKeyFile:       "key.pem",
-		IdleTimeout:       time.Second,
-		ReadHeaderTimeout: 2 * time.Second,
-		ReadTimeout:       3 * time.Second,
-		WriteTimeout:      4 * time.Second,
+		Addr:                ":1234",
+		CertFile:            "cert.pem",
+		CertKeyFile:         "key.pem",
+		IdleTimeout:         time.Second,
+		MaxHeaderBytes:      32 * 1024,
+		MaxHeaderValueCount: 64,
+		ReadHeaderTimeout:   2 * time.Second,
+		ReadTimeout:         3 * time.Second,
+		WriteTimeout:        4 * time.Second,
 	})
 
 	test.Equal(t, ":1234", s.opts.Addr)
 	test.Equal(t, "cert.pem", s.opts.CertFile)
 	test.Equal(t, "key.pem", s.opts.CertKeyFile)
 	test.Equal(t, time.Second, s.opts.IdleTimeout)
+	test.Equal(t, 32*1024, s.opts.MaxHeaderBytes)
+	test.Equal(t, 64, s.opts.MaxHeaderValueCount)
 	test.Equal(t, 2*time.Second, s.opts.ReadHeaderTimeout)
 	test.Equal(t, 3*time.Second, s.opts.ReadTimeout)
 	test.Equal(t, 4*time.Second, s.opts.WriteTimeout)
+	test.Equal(t, 32*1024, s.server.MaxHeaderBytes)
+	test.Equal(t, 64, s.server.MaxHeaderValueCount)
 }
 
 func TestServerMux(t *testing.T) {
