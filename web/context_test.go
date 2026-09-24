@@ -443,7 +443,7 @@ func TestContextWriterPushUnsupported(t *testing.T) {
 
 type basicWriter struct {
 	header http.Header
-	code   int
+	status int
 	codes  []int
 	wrote  bool
 }
@@ -458,7 +458,7 @@ func (w *basicWriter) Write(b []byte) (int, error) {
 }
 
 func (w *basicWriter) WriteHeader(statusCode int) {
-	w.code = statusCode
+	w.status = statusCode
 	w.codes = append(w.codes, statusCode)
 }
 

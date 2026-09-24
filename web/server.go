@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,11 +37,11 @@ func (h HandlerFunc) Serve(c *Context) {
 		}
 
 		// write error response
-		code := err.Status()
-		if code < 400 || code > 599 {
-			code = http.StatusInternalServerError
+		status := err.Status()
+		if status < 400 || status > 599 {
+			status = http.StatusInternalServerError
 		}
-		c.logError(code, err)
+		c.logError(status, err)
 
 		// Error handler cannot change a response that has already started.
 		if c.responseWritten() {
@@ -56,14 +55,7 @@ func (h HandlerFunc) Serve(c *Context) {
 		}
 
 		// Fallback error response.
-		message := err.Error()
-		if code >= http.StatusInternalServerError {
-			message = strings.ToLower(http.StatusText(code))
-			if message == "" {
-				message = "internal server error"
-			}
-		}
-		if err := c.JSON(map[string]string{"error": message}, code); err != nil {
+		if err := c.JSON(map[string]string{"error": err.Error()}, status); err != nil {
 			c.logErrorResponseWrite(err)
 		}
 	}

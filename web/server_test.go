@@ -216,17 +216,16 @@ func TestServerServeHTTPLogsEffectiveErrorStatus(t *testing.T) {
 		`"msg":"http: GET http://example.com/fail HTTP/1.1 from 192.0.2.1:1234 (500)"`,
 	))
 	test.True(t, strings.Contains(logs.String(), `"err":"bad status"`))
-	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+	test.Equal(t, `{"error":"bad status"}`, rr.Body.String())
 }
 
-func TestServerServeHTTPDoesNotExposeInternalError(t *testing.T) {
+func TestServerServeHTTPErrorStatus(t *testing.T) {
 	t.Parallel()
 
-	const internalError = "database connection to secret-host failed"
 	var logs bytes.Buffer
 	s := NewServer(Options{Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
 	s.Get("/fail", func(*Context) error {
-		return errors.New(internalError)
+		return ErrorStatus()
 	})
 
 	rr := httptest.NewRecorder()
@@ -234,8 +233,7 @@ func TestServerServeHTTPDoesNotExposeInternalError(t *testing.T) {
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
 	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
-	test.False(t, strings.Contains(rr.Body.String(), internalError))
-	test.True(t, strings.Contains(logs.String(), `"err":"`+internalError+`"`))
+	test.True(t, strings.Contains(logs.String(), `"err":"internal server error"`))
 }
 
 func TestServerServeHTTPDoesNotUseDefaultLogger(t *testing.T) {
@@ -425,7 +423,7 @@ func TestHandlerFuncServeErrorDefaultsToInternalServerError(t *testing.T) {
 	h.Serve(c)
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
-	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+	test.Equal(t, `{"error":"failed"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeInvalidStatusErrorDefaultsToInternalServerError(t *testing.T) {
@@ -440,7 +438,7 @@ func TestHandlerFuncServeInvalidStatusErrorDefaultsToInternalServerError(t *test
 	h.Serve(c)
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
-	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+	test.Equal(t, `{"error":"bad status"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeUnknownServerErrorUsesGenericMessage(t *testing.T) {
@@ -449,13 +447,43 @@ func TestHandlerFuncServeUnknownServerErrorUsesGenericMessage(t *testing.T) {
 	rr := httptest.NewRecorder()
 	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	h := HandlerFunc(func(*Context) error {
-		return Error(599, "unexpected error")
+		return ErrorStatus(599)
 	})
 
 	h.Serve(c)
 
 	test.Equal(t, 599, rr.Code)
 	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+}
+
+func TestHandlerFuncServeErrorStatusUsesStatusMessage(t *testing.T) {
+	t.Parallel()
+
+	rr := httptest.NewRecorder()
+	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	h := HandlerFunc(func(*Context) error {
+		return ErrorStatus(http.StatusServiceUnavailable)
+	})
+
+	h.Serve(c)
+
+	test.Equal(t, http.StatusServiceUnavailable, rr.Code)
+	test.Equal(t, `{"error":"service unavailable"}`, rr.Body.String())
+}
+
+func TestHandlerFuncServeWrappedServerError(t *testing.T) {
+	t.Parallel()
+
+	rr := httptest.NewRecorder()
+	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	h := HandlerFunc(func(*Context) error {
+		return ErrorWrap(http.StatusInternalServerError, errors.New("failed"))
+	})
+
+	h.Serve(c)
+
+	test.Equal(t, http.StatusInternalServerError, rr.Code)
+	test.Equal(t, `{"error":"failed"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeDoesNotWriteErrorAfterResponse(t *testing.T) {

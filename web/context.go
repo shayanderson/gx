@@ -147,11 +147,11 @@ func (c *Context) Get(key any) any {
 
 // HTML writes an HTML response.
 // If a status code is provided, it writes that status code, otherwise defaults to 200.
-func (c *Context) HTML(s string, code ...int) error {
+func (c *Context) HTML(s string, status ...int) error {
 	w := c.Writer()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if len(code) > 0 {
-		c.Status(code[0])
+	if len(status) > 0 {
+		c.Status(status[0])
 	}
 	_, err := io.WriteString(w, s)
 	return err
@@ -160,7 +160,7 @@ func (c *Context) HTML(s string, code ...int) error {
 // JSON writes the given value as JSON to the response.
 // If a status code is provided, it writes that status code, otherwise defaults to 200.
 // URL query parameter "pretty" can be used to pretty-print the JSON.
-func (c *Context) JSON(v any, code ...int) error {
+func (c *Context) JSON(v any, status ...int) error {
 	var (
 		data []byte
 		err  error
@@ -177,8 +177,8 @@ func (c *Context) JSON(v any, code ...int) error {
 	w := c.Writer()
 	w.Header().Set("Content-Type", "application/json")
 
-	if len(code) > 0 {
-		c.Status(code[0])
+	if len(status) > 0 {
+		c.Status(status[0])
 	}
 	_, err = w.Write(data)
 	return err
@@ -186,12 +186,12 @@ func (c *Context) JSON(v any, code ...int) error {
 
 // Redirect redirects the request to the given URL with the given status code.
 // If no status code is provided, it defaults to 303 See Other.
-func (c *Context) Redirect(url string, code ...int) {
-	status := http.StatusSeeOther
-	if len(code) > 0 {
-		status = code[0]
+func (c *Context) Redirect(url string, status ...int) {
+	httpStatus := http.StatusSeeOther
+	if len(status) > 0 {
+		httpStatus = status[0]
 	}
-	http.Redirect(c.Writer(), c.Request, url, status)
+	http.Redirect(c.Writer(), c.Request, url, httpStatus)
 }
 
 // Set sets a value in the context by key.
@@ -201,17 +201,17 @@ func (c *Context) Set(key, value any) {
 }
 
 // Status writes the HTTP status code in the response.
-func (c *Context) Status(code int) {
-	c.writer.WriteHeader(code)
+func (c *Context) Status(status int) {
+	c.writer.WriteHeader(status)
 }
 
 // String writes a plain text response.
 // If a status code is provided, it writes that status code, otherwise defaults to 200.
-func (c *Context) String(s string, code ...int) error {
+func (c *Context) String(s string, status ...int) error {
 	w := c.Writer()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if len(code) > 0 {
-		c.Status(code[0])
+	if len(status) > 0 {
+		c.Status(status[0])
 	}
 	_, err := io.WriteString(w, s)
 	return err

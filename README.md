@@ -400,6 +400,11 @@ s.Post("/users", func(c *web.Context) error {
 })
 ```
 
+Handler error messages are returned to clients. For an error that should not be public, log the
+details in the application and return `web.ErrorStatus()`, which returns a 500 Internal Server
+Error response. Pass a status to return its generic message, such as
+`web.ErrorStatus(http.StatusServiceUnavailable)`.
+
 Logging is opt-in: set `Logger` to receive request and error logs or leave it nil to disable
 logging. `LogPrefix` defaults to `"http"` when a logger is configured.
 

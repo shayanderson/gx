@@ -3,6 +3,8 @@ package web
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 )
 
 // StatusError is an error with an associated HTTP status code.
@@ -48,6 +50,20 @@ func Errorf(status int, format string, a ...any) StatusError {
 		err:    fmt.Errorf(format, a...),
 		status: status,
 	}
+}
+
+// ErrorStatus creates a status error using the corresponding HTTP status text.
+// If no status is provided, it defaults to 500 Internal Server Error.
+func ErrorStatus(status ...int) StatusError {
+	httpStatus := http.StatusInternalServerError
+	if len(status) > 0 {
+		httpStatus = status[0]
+	}
+	text := http.StatusText(httpStatus)
+	if text == "" {
+		text = http.StatusText(http.StatusInternalServerError)
+	}
+	return Error(httpStatus, strings.ToLower(text))
 }
 
 // ErrorWrap wraps an existing error with a status code.

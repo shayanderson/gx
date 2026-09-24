@@ -45,3 +45,30 @@ func TestErrorWrapNil(t *testing.T) {
 
 	test.Nil(t, err)
 }
+
+func TestErrorStatus(t *testing.T) {
+	t.Parallel()
+
+	err := web.ErrorStatus(http.StatusServiceUnavailable)
+
+	test.Equal(t, "service unavailable", err.Error())
+	test.Equal(t, http.StatusServiceUnavailable, err.Status())
+}
+
+func TestErrorStatusDefaultsToInternalServerError(t *testing.T) {
+	t.Parallel()
+
+	err := web.ErrorStatus()
+
+	test.Equal(t, "internal server error", err.Error())
+	test.Equal(t, http.StatusInternalServerError, err.Status())
+}
+
+func TestErrorStatusUsesInternalServerErrorForUnknownStatus(t *testing.T) {
+	t.Parallel()
+
+	err := web.ErrorStatus(599)
+
+	test.Equal(t, "internal server error", err.Error())
+	test.Equal(t, 599, err.Status())
+}
