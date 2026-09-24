@@ -80,6 +80,22 @@ func TestContextBindJSONMediaTypeWithSpaceBeforeParameters(t *testing.T) {
 	test.Equal(t, "shay", got.Name)
 }
 
+func TestContextBindAnyContentType(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
+	req.Header.Set("Content-Type", "text/plain")
+	c := NewContext(httptest.NewRecorder(), req)
+	var got struct {
+		Name string `json:"name"`
+	}
+
+	err := c.BindAnyContentType(&got)
+
+	test.NoError(t, err)
+	test.Equal(t, "shay", got.Name)
+}
+
 func TestContextBindInvalidContentType(t *testing.T) {
 	t.Parallel()
 

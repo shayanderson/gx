@@ -82,23 +82,21 @@ func (w *responseWriter) WriteHeader(status int) {
 
 // Context represents the context of an HTTP request.
 type Context struct {
-	Request                 *http.Request
-	allowNonJSONContentType bool
-	ctx                     context.Context
-	errorHandler            ErrorHandlerFunc
-	logger                  *slog.Logger
-	logPrefix               string
-	maxReadSize             int64
-	writer                  *responseWriter
+	Request      *http.Request
+	ctx          context.Context
+	errorHandler ErrorHandlerFunc
+	logger       *slog.Logger
+	logPrefix    string
+	maxReadSize  int64
+	writer       *responseWriter
 }
 
 // contextOptions holds the configuration options for a Context.
 type contextOptions struct {
-	allowNonJSONContentType bool
-	errorHandler            ErrorHandlerFunc
-	logger                  *slog.Logger
-	logPrefix               string
-	maxReadSize             int64
+	errorHandler ErrorHandlerFunc
+	logger       *slog.Logger
+	logPrefix    string
+	maxReadSize  int64
 }
 
 // NewContext creates a new Context.
@@ -114,43 +112,27 @@ func newContext(w http.ResponseWriter, r *http.Request, opts contextOptions) *Co
 	}
 
 	return &Context{
-		Request:                 r,
-		allowNonJSONContentType: opts.allowNonJSONContentType,
-		ctx:                     r.Context(),
-		errorHandler:            opts.errorHandler,
-		logger:                  opts.logger,
-		logPrefix:               opts.logPrefix,
-		maxReadSize:             opts.maxReadSize,
-		writer:                  writer,
+		Request:      r,
+		ctx:          r.Context(),
+		errorHandler: opts.errorHandler,
+		logger:       opts.logger,
+		logPrefix:    opts.logPrefix,
+		maxReadSize:  opts.maxReadSize,
+		writer:       writer,
 	}
 }
 
-// Bind binds a JSON request body to the given struct. By default, it uses a lightweight
-// Content-Type check that accepts application/json with optional parameters.
+// Bind binds a JSON request body to the given struct. It requires a Content-Type of
+// application/json, parameters such as charset are allowed. Use BindAnyContentType to skip
+// this check.
 func (c *Context) Bind(v any) error {
-	contentType := strings.ToLower(strings.TrimSpace(c.Request.Header.Get("Content-Type")))
-	suffix, isJSONContentType := strings.CutPrefix(contentType, "application/json")
-	if !c.allowNonJSONContentType &&
-		(!isJSONContentType ||
-			(suffix != "" && !strings.HasPrefix(strings.TrimSpace(suffix), ";"))) {
-		return Error(http.StatusBadRequest, "invalid content type, expected application/json")
-	}
+	return c.bind(v, true)
+}
 
-	r := io.Reader(c.Request.Body)
-	if c.maxReadSize > 0 {
-		// Use the underlying writer so MaxBytesReader can notify net/http to
-		// close the connection after a body-limit error.
-		r = http.MaxBytesReader(c.writer.Unwrap(), c.Request.Body, c.maxReadSize)
-	}
-
-	err := json.UnmarshalRead(r, v)
-	if err == nil {
-		return nil
-	}
-	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-		return ErrorWrap(http.StatusRequestEntityTooLarge, err)
-	}
-	return Error(http.StatusBadRequest, "invalid json body")
+// BindAnyContentType binds a JSON request body to the given struct without validating Content-Type.
+// For browser clients using cookie authentication, use CSRF protection or origin validation.
+func (c *Context) BindAnyContentType(v any) error {
+	return c.bind(v, false)
 }
 
 // Context returns the underlying context.Context.
@@ -238,6 +220,34 @@ func (c *Context) String(s string, code ...int) error {
 // Writer returns the underlying http.ResponseWriter.
 func (c *Context) Writer() http.ResponseWriter {
 	return c.writer
+}
+
+// bind binds a JSON request body to the given struct, with an option to validate the Content-Type.
+func (c *Context) bind(v any, validateContentType bool) error {
+	if validateContentType {
+		contentType := strings.ToLower(strings.TrimSpace(c.Request.Header.Get("Content-Type")))
+		suffix, isJSONContentType := strings.CutPrefix(contentType, "application/json")
+		if !isJSONContentType ||
+			(suffix != "" && !strings.HasPrefix(strings.TrimSpace(suffix), ";")) {
+			return Error(http.StatusBadRequest, "invalid content type, expected application/json")
+		}
+	}
+
+	r := io.Reader(c.Request.Body)
+	if c.maxReadSize > 0 {
+		// Use the underlying writer so MaxBytesReader can notify net/http to
+		// close the connection after a body-limit error.
+		r = http.MaxBytesReader(c.writer.Unwrap(), c.Request.Body, c.maxReadSize)
+	}
+
+	err := json.UnmarshalRead(r, v)
+	if err == nil {
+		return nil
+	}
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		return ErrorWrap(http.StatusRequestEntityTooLarge, err)
+	}
+	return Error(http.StatusBadRequest, "invalid json body")
 }
 
 // logError logs an HTTP request error.

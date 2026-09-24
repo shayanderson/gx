@@ -36,22 +36,20 @@ func TestNewServerPreservesOptions(t *testing.T) {
 	maxReadSize := int64(1024)
 
 	s := NewServer(Options{
-		Addr:                    ":1234",
-		AllowNonJSONContentType: true,
-		CertFile:                "cert.pem",
-		CertKeyFile:             "key.pem",
-		IdleTimeout:             time.Second,
-		MaxHeaderBytes:          32 * 1024,
-		MaxHeaderValueCount:     64,
-		ReadHeaderTimeout:       2 * time.Second,
-		ReadTimeout:             3 * time.Second,
-		ShutdownTimeout:         5 * time.Second,
-		WriteTimeout:            4 * time.Second,
-		MaxReadSize:             &maxReadSize,
+		Addr:                ":1234",
+		CertFile:            "cert.pem",
+		CertKeyFile:         "key.pem",
+		IdleTimeout:         time.Second,
+		MaxHeaderBytes:      32 * 1024,
+		MaxHeaderValueCount: 64,
+		ReadHeaderTimeout:   2 * time.Second,
+		ReadTimeout:         3 * time.Second,
+		ShutdownTimeout:     5 * time.Second,
+		WriteTimeout:        4 * time.Second,
+		MaxReadSize:         &maxReadSize,
 	})
 
 	test.Equal(t, ":1234", s.opts.Addr)
-	test.True(t, s.opts.AllowNonJSONContentType)
 	test.Equal(t, "cert.pem", s.opts.CertFile)
 	test.Equal(t, "key.pem", s.opts.CertKeyFile)
 	test.Equal(t, time.Second, s.opts.IdleTimeout)
@@ -63,7 +61,6 @@ func TestNewServerPreservesOptions(t *testing.T) {
 	test.Equal(t, 4*time.Second, s.opts.WriteTimeout)
 	test.Equal(t, 32*1024, s.server.MaxHeaderBytes)
 	test.Equal(t, 64, s.server.MaxHeaderValueCount)
-	test.True(t, s.contextOpts.allowNonJSONContentType)
 	test.Equal(t, maxReadSize, s.contextOpts.maxReadSize)
 }
 
@@ -601,15 +598,32 @@ func TestServerBindErrorResponses(t *testing.T) {
 	}
 }
 
-func TestServerBindAllowsNonJSONContentType(t *testing.T) {
+func TestServerBindRequiresJSONContentType(t *testing.T) {
 	t.Parallel()
 
-	s := NewServer(Options{AllowNonJSONContentType: true})
+	s := NewServer(Options{})
+	s.Post("/", func(c *Context) error {
+		return c.Bind(&struct{}{})
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(rr, req)
+
+	test.Equal(t, http.StatusBadRequest, rr.Code)
+	test.Equal(t, `{"error":"invalid content type, expected application/json"}`, rr.Body.String())
+}
+
+func TestServerBindAnyContentType(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{})
 	s.Post("/", func(c *Context) error {
 		var body struct {
 			Name string `json:"name"`
 		}
-		if err := c.Bind(&body); err != nil {
+		if err := c.BindAnyContentType(&body); err != nil {
 			return err
 		}
 		return c.String(body.Name)

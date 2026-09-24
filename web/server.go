@@ -92,11 +92,6 @@ type Options struct {
 	// Addr is the address to listen on.
 	Addr string
 
-	// AllowNonJSONContentType allows Bind to decode JSON regardless of Content-Type.
-	// When enabling it for browser clients using cookie authentication, use CSRF protection
-	// or origin validation.
-	AllowNonJSONContentType bool
-
 	// CertFile is the path to the TLS certificate file.
 	CertFile string
 
@@ -169,11 +164,10 @@ func NewServer(opts Options) *Server {
 		opts.ShutdownTimeout = DefaultShutdownTimeout
 	}
 	contextOpts := contextOptions{
-		allowNonJSONContentType: opts.AllowNonJSONContentType,
-		errorHandler:            opts.ErrorHandler,
-		logger:                  opts.Logger,
-		logPrefix:               opts.LogPrefix,
-		maxReadSize:             DefaultMaxReadSize,
+		errorHandler: opts.ErrorHandler,
+		logger:       opts.Logger,
+		logPrefix:    opts.LogPrefix,
+		maxReadSize:  DefaultMaxReadSize,
 	}
 	if opts.MaxReadSize != nil {
 		contextOpts.maxReadSize = *opts.MaxReadSize
