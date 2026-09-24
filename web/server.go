@@ -2,45 +2,33 @@ package web
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// RootPattern is a pattern that matches the root path "/"
+// RootPattern is a pattern that matches the root path "/".
 const RootPattern = "/{$}"
 
-// ErrorHandlerFunc is the default error handler used for handling error responses
-var ErrorHandler ErrorHandlerFunc
+// DefaultShutdownTimeout is the default maximum time Stop waits for in-flight requests.
+const DefaultShutdownTimeout = 2 * time.Second
 
-// ErrorHandler is a custom error handler for handling error responses
+// ErrorHandlerFunc handles a status error response.
 type ErrorHandlerFunc func(*Context, StatusError)
 
-// HandlerFunc is a http handler that returns an error
+// HandlerFunc is a http handler that returns an error.
 type HandlerFunc func(*Context) error
 
-// Serve serves an HTTP request
+// Serve serves an HTTP request.
 func (h HandlerFunc) Serve(c *Context) {
-	if !c.isMiddleware() {
-		// log request when not in middleware
-		slog.Info( // #nosec G706
-			fmt.Sprintf(
-				"http: %s http://%s%s %s from %s",
-				c.Request.Method,
-				c.Request.Host,
-				c.Request.RequestURI,
-				c.Request.Proto,
-				c.Request.RemoteAddr,
-			),
-		)
-	}
-
 	if hErr := h(c); hErr != nil {
 		var err StatusError
-		if sErr, ok := hErr.(StatusError); ok {
+		if sErr, ok := errors.AsType[StatusError](hErr); ok {
 			err = sErr
 		} else {
 			err = statusError{
@@ -48,45 +36,50 @@ func (h HandlerFunc) Serve(c *Context) {
 				status: http.StatusInternalServerError,
 			}
 		}
-		// log error
-		slog.Error(fmt.Sprintf( // #nosec G706
-			"http: %s http://%s%s %s from %s (%d)",
-			c.Request.Method,
-			c.Request.Host,
-			c.Request.RequestURI,
-			c.Request.Proto,
-			c.Request.RemoteAddr,
-			err.Status(),
-		), slog.String("err", err.Error()))
+
 		// write error response
 		code := err.Status()
 		if code < 400 || code > 599 {
 			code = http.StatusInternalServerError
 		}
-		// use custom error handler if set
-		if ErrorHandler != nil {
-			ErrorHandler(c, err)
+		c.logError(code, err)
+
+		// Error handler cannot change a response that has already started.
+		if c.responseWritten() {
 			return
 		}
-		// fallback error response
-		if err := c.JSON(map[string]string{"error": err.Error()}, code); err != nil {
-			panic("http server failed to write error response: " + err.Error())
+
+		// Use custom error handler if set.
+		if c.errorHandler != nil {
+			c.errorHandler(c, err)
+			return
+		}
+
+		// Fallback error response.
+		message := err.Error()
+		if code >= http.StatusInternalServerError {
+			message = strings.ToLower(http.StatusText(code))
+			if message == "" {
+				message = "internal server error"
+			}
+		}
+		if err := c.JSON(map[string]string{"error": message}, code); err != nil {
+			c.logErrorResponseWrite(err)
 		}
 	}
 }
 
-// ServeHTTP serves an HTTP request
+// ServeHTTP serves a handler using the default context configuration.
+// To serve a handler with Server options and global middleware, use Server.Handler.
 func (r HandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c := NewContext(w, req)
-	defer c.Request.Body.Close()
-
 	r.Serve(c)
 }
 
-// Middleware is a function that wraps a Handler
+// Middleware is a function that wraps a Handler.
 type Middleware func(HandlerFunc) HandlerFunc
 
-// chain applies middleware to a handler
+// chain applies middleware to a handler.
 func chain(h HandlerFunc, middleware ...Middleware) HandlerFunc {
 	for _, m := range middleware {
 		h = m(h)
@@ -94,20 +87,38 @@ func chain(h HandlerFunc, middleware ...Middleware) HandlerFunc {
 	return h
 }
 
-// Options holds the configuration options for the Server
+// Options holds the configuration options for the Server.
 type Options struct {
-	// Addr is the address to listen on
+	// Addr is the address to listen on.
 	Addr string
 
-	// CertFile is the path to the TLS certificate file
+	// AllowNonJSONContentType allows Bind to decode JSON regardless of Content-Type.
+	// When enabling it for browser clients using cookie authentication, use CSRF protection
+	// or origin validation.
+	AllowNonJSONContentType bool
+
+	// CertFile is the path to the TLS certificate file.
 	CertFile string
 
-	// CertKeyFile is the path to the TLS certificate key file
+	// CertKeyFile is the path to the TLS certificate key file.
 	CertKeyFile string
 
 	// IdleTimeout is the maximum amount of time to wait for the next request
-	// when keep-alive is enabled
+	// when keep-alive is enabled.
 	IdleTimeout time.Duration
+
+	// Logger receives request and error logs. A nil logger disables logging.
+	Logger *slog.Logger
+
+	// LogPrefix prefixes request and error messages. It defaults to "http".
+	LogPrefix string
+
+	// ErrorHandler handles errors returned by handlers. A nil handler writes a JSON error response.
+	ErrorHandler ErrorHandlerFunc
+
+	// MaxReadSize is the maximum number of request-body bytes read by Bind.
+	// A nil value uses DefaultMaxReadSize; a value of 0 disables the limit.
+	MaxReadSize *int64
 
 	// MaxHeaderBytes is the maximum size of request headers.
 	MaxHeaderBytes int
@@ -115,27 +126,36 @@ type Options struct {
 	// MaxHeaderValueCount is the maximum number of request header values.
 	MaxHeaderValueCount int
 
-	// ReadHeaderTimeout is the amount of time allowed to read request headers
+	// ReadHeaderTimeout is the amount of time allowed to read request headers.
 	ReadHeaderTimeout time.Duration
 
-	// ReadTimeout is the maximum duration for reading the entire request, including the body
+	// ReadTimeout is the maximum duration for reading the entire request, including the body.
 	ReadTimeout time.Duration
 
-	// WriteTimeout is the maximum duration before timing out writes of the response
+	// ShutdownTimeout is the maximum time Stop waits for in-flight requests.
+	// It defaults to DefaultShutdownTimeout.
+	ShutdownTimeout time.Duration
+
+	// WriteTimeout is the maximum duration before timing out writes of the response.
 	WriteTimeout time.Duration
 }
 
 // Server is a simple HTTP server with middleware support
 type Server struct {
-	middleware []Middleware
-	mux        *http.ServeMux
-	opts       Options
-	server     *http.Server
-	stopping   atomic.Bool
+	contextOpts     contextOptions
+	middleware      []Middleware
+	middlewareChain func() HandlerFunc
+	mux             *http.ServeMux
+	opts            Options
+	server          *http.Server
+	stopping        atomic.Bool
 }
 
-// NewServer creates a new server instance
+// NewServer creates a new server instance.
 func NewServer(opts Options) *Server {
+	if opts.LogPrefix == "" {
+		opts.LogPrefix = "http"
+	}
 	if opts.ReadHeaderTimeout == 0 {
 		opts.ReadHeaderTimeout = 3 * time.Second
 	}
@@ -145,14 +165,38 @@ func NewServer(opts Options) *Server {
 	if opts.WriteTimeout == 0 {
 		opts.WriteTimeout = 5 * time.Second
 	}
+	if opts.ShutdownTimeout == 0 {
+		opts.ShutdownTimeout = DefaultShutdownTimeout
+	}
+	contextOpts := contextOptions{
+		allowNonJSONContentType: opts.AllowNonJSONContentType,
+		errorHandler:            opts.ErrorHandler,
+		logger:                  opts.Logger,
+		logPrefix:               opts.LogPrefix,
+		maxReadSize:             DefaultMaxReadSize,
+	}
+	if opts.MaxReadSize != nil {
+		contextOpts.maxReadSize = *opts.MaxReadSize
+	}
 
 	s := &Server{
-		opts: opts,
-		mux:  http.NewServeMux(),
+		contextOpts: contextOpts,
+		opts:        opts,
+		mux:         http.NewServeMux(),
 	}
+	s.middlewareChain = sync.OnceValue(func() HandlerFunc {
+		h := HandlerFunc(func(c *Context) error {
+			s.mux.ServeHTTP(c.Writer(), c.Request)
+			return nil
+		})
+		for _, middleware := range slices.Backward(s.middleware) {
+			h = middleware(h)
+		}
+		return h
+	})
 	s.server = &http.Server{
 		Addr:                opts.Addr,
-		Handler:             s.mux,
+		Handler:             s.Handler(),
 		IdleTimeout:         opts.IdleTimeout,
 		MaxHeaderBytes:      opts.MaxHeaderBytes,
 		MaxHeaderValueCount: opts.MaxHeaderValueCount,
@@ -163,82 +207,85 @@ func NewServer(opts Options) *Server {
 	return s
 }
 
-// Delete registers a new DELETE route with a handler
+// Delete registers a new DELETE route with a handler.
 func (s *Server) Delete(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodDelete+" "+pattern, handler, middleware...)
 }
 
-// Get registers a new GET route with a handler
+// Get registers a new GET route with a handler.
 func (s *Server) Get(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodGet+" "+pattern, handler, middleware...)
 }
 
-// Handle registers a new route with a handler
+// Handle registers a new route with a handler.
 func (s *Server) Handle(pattern string, handler HandlerFunc, middleware ...Middleware) {
-	s.mux.Handle(pattern, chain(handler, middleware...))
+	h := chain(handler, middleware...)
+
+	s.mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c := newContext(w, r, s.contextOpts)
+		h.Serve(c)
+	}))
 }
 
-// Mux returns the underlying http.ServeMux
+// Handler returns an HTTP handler that applies the server's options and global middleware.
+func (s *Server) Handler() http.Handler {
+	return http.HandlerFunc(s.serveHTTP)
+}
+
+// Mux returns the underlying http.ServeMux.
+// Requests served directly through the mux bypass global middleware and request logging.
 func (s *Server) Mux() *http.ServeMux {
 	return s.mux
 }
 
-// Patch registers a new PATCH route with a handler
+// Patch registers a new PATCH route with a handler.
 func (s *Server) Patch(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodPatch+" "+pattern, handler, middleware...)
 }
 
-// Post registers a new POST route with a handler
+// Post registers a new POST route with a handler.
 func (s *Server) Post(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodPost+" "+pattern, handler, middleware...)
 }
 
-// Put registers a new PUT route with a handler
+// Put registers a new PUT route with a handler.
 func (s *Server) Put(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodPut+" "+pattern, handler, middleware...)
 }
 
-// Start starts the HTTP server
+// Start starts the HTTP server.
 func (s *Server) Start() error {
-	// base handler to start the chain
-	h := HandlerFunc(func(c *Context) error {
-		s.mux.ServeHTTP(c.Writer(), c.Request)
-		return nil
-	})
-
-	// apply middleware
-	for _, v := range slices.Backward(s.middleware) {
-		h = v(h)
-	}
-
-	// wrap base handler
-	s.server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := NewContext(w, r)
-		c.middleware()
-		h.Serve(c)
-	})
-
 	var err error
 	if s.opts.CertFile != "" && s.opts.CertKeyFile != "" {
 		err = s.server.ListenAndServeTLS(s.opts.CertFile, s.opts.CertKeyFile)
 	} else {
 		err = s.server.ListenAndServe()
 	}
-	if err != nil && err == http.ErrServerClosed && s.stopping.Load() {
+	if err != nil && errors.Is(err, http.ErrServerClosed) && s.stopping.Load() {
 		return nil
 	}
 	return err
 }
 
-// Stop stops the HTTP server
+// Stop stops the HTTP server.
 func (s *Server) Stop() error {
 	s.stopping.Store(true)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), s.opts.ShutdownTimeout)
 	defer cancel()
 	return s.server.Shutdown(ctx)
 }
 
-// Use adds middleware to the server
+// Use adds middleware to the server. It must be called before the server begins serving requests.
+// Route handler errors are handled before they return to global middleware, so next returns nil for
+// route errors.
 func (s *Server) Use(middleware ...Middleware) {
 	s.middleware = append(s.middleware, middleware...)
+}
+
+// serveHTTP logs and dispatches an HTTP request.
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	c := newContext(w, r, s.contextOpts)
+	c.logRequest()
+
+	s.middlewareChain().Serve(c)
 }

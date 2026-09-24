@@ -382,9 +382,28 @@ s.Get("/", func(c *web.Context) error {
 s.Get("/users/{id}", func(c *web.Context) error {
     user, err := store.Get(c.Context(), c.Request.PathValue("id"))
     if err != nil {
-        return web.ErrorWrap(http.StatusNotFound, err)
+        return web.Error(http.StatusNotFound, "user not found")
     }
 
     return c.JSON(user)
 })
+
+s.Post("/users", func(c *web.Context) error {
+    var input struct {
+        Name string `json:"name"`
+    }
+    if err := c.Bind(&input); err != nil {
+        return err
+    }
+
+    return c.JSON(input, http.StatusCreated)
+})
 ```
+
+Logging is opt-in: set `Logger` to receive request and error logs or leave it nil to disable
+logging. `LogPrefix` defaults to `"http"` when a logger is configured.
+
+`MaxReadSize` limits the bytes `Context.Bind` reads from a request body. A nil value uses the
+5 MB default. Set it to `0` to disable the limit.
+
+`ShutdownTimeout` controls how long `Stop` waits for in-flight requests and defaults to 2 seconds.

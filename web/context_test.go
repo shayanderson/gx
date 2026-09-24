@@ -24,6 +24,7 @@ func TestNewContext(t *testing.T) {
 	test.Same(t, req, c.Request)
 	test.True(t, req.Context() == c.Context())
 	test.NotNil(t, c.Writer())
+	test.Equal(t, DefaultMaxReadSize, c.maxReadSize)
 }
 
 func TestContextSetAndGet(t *testing.T) {
@@ -39,14 +40,12 @@ func TestContextSetAndGet(t *testing.T) {
 	test.NotEqual(t, context.Background(), c.Context())
 }
 
-func TestContextMiddleware(t *testing.T) {
+func TestContextLogErrorResponseWriteWithoutLogger(t *testing.T) {
 	t.Parallel()
 
 	c := NewContext(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
-	test.False(t, c.isMiddleware())
-	c.middleware()
-	test.True(t, c.isMiddleware())
+	c.logErrorResponseWrite(errors.New("write failed"))
 }
 
 func TestContextBind(t *testing.T) {
@@ -54,6 +53,22 @@ func TestContextBind(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	c := NewContext(httptest.NewRecorder(), req)
+	var got struct {
+		Name string `json:"name"`
+	}
+
+	err := c.Bind(&got)
+
+	test.NoError(t, err)
+	test.Equal(t, "shay", got.Name)
+}
+
+func TestContextBindJSONMediaTypeWithSpaceBeforeParameters(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
+	req.Header.Set("Content-Type", "application/json ; charset=utf-8")
 	c := NewContext(httptest.NewRecorder(), req)
 	var got struct {
 		Name string `json:"name"`
@@ -75,9 +90,25 @@ func TestContextBindInvalidContentType(t *testing.T) {
 	err := c.Bind(&struct{}{})
 
 	test.NotNil(t, err)
-	var statusErr StatusError
-	test.True(t, errors.As(err, &statusErr))
+	statusErr, ok := errors.AsType[StatusError](err)
+	test.True(t, ok)
 	test.Equal(t, http.StatusBadRequest, statusErr.Status())
+	test.Equal(t, "invalid content type, expected application/json", statusErr.Error())
+}
+
+func TestContextBindInvalidJSONMediaType(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
+	req.Header.Set("Content-Type", "application/jsonfoo")
+	c := NewContext(httptest.NewRecorder(), req)
+
+	err := c.Bind(&struct{}{})
+
+	statusErr, ok := errors.AsType[StatusError](err)
+	test.True(t, ok)
+	test.Equal(t, http.StatusBadRequest, statusErr.Status())
+	test.Equal(t, "invalid content type, expected application/json", statusErr.Error())
 }
 
 func TestContextBindInvalidJSON(t *testing.T) {
@@ -90,30 +121,35 @@ func TestContextBindInvalidJSON(t *testing.T) {
 	err := c.Bind(&struct{}{})
 
 	test.NotNil(t, err)
+	statusErr, ok := errors.AsType[StatusError](err)
+	test.True(t, ok)
+	test.Equal(t, http.StatusBadRequest, statusErr.Status())
+	test.Equal(t, "invalid json body", statusErr.Error())
 }
 
 func TestContextBindLimitReadSize(t *testing.T) {
-	original := LimitReadSize
-	LimitReadSize = 7
-	defer func() { LimitReadSize = original }()
+	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
 	req.Header.Set("Content-Type", "application/json")
-	c := NewContext(httptest.NewRecorder(), req)
+	c := newContext(httptest.NewRecorder(), req, contextOptions{maxReadSize: 7})
 
 	err := c.Bind(&struct{}{})
 
 	test.NotNil(t, err)
+	statusErr, ok := errors.AsType[StatusError](err)
+	test.True(t, ok)
+	test.Equal(t, http.StatusRequestEntityTooLarge, statusErr.Status())
+	_, ok = errors.AsType[*http.MaxBytesError](err)
+	test.True(t, ok)
 }
 
 func TestContextBindNoLimitReadSize(t *testing.T) {
-	original := LimitReadSize
-	LimitReadSize = 0
-	defer func() { LimitReadSize = original }()
+	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
 	req.Header.Set("Content-Type", "application/json")
-	c := NewContext(httptest.NewRecorder(), req)
+	c := newContext(httptest.NewRecorder(), req, contextOptions{})
 	var got struct {
 		Name string `json:"name"`
 	}
@@ -134,7 +170,7 @@ func TestContextString(t *testing.T) {
 
 	test.NoError(t, err)
 	test.Equal(t, http.StatusCreated, rr.Code)
-	test.Equal(t, "text/plain; charset=utf-8", rr.Header().Get("Content-Type"))
+	test.Equal(t, "text/plain; charset=utf-8", rr.Result().Header.Get("Content-Type"))
 	test.Equal(t, "hello", rr.Body.String())
 }
 
@@ -148,7 +184,7 @@ func TestContextHTML(t *testing.T) {
 
 	test.NoError(t, err)
 	test.Equal(t, http.StatusAccepted, rr.Code)
-	test.Equal(t, "text/html; charset=utf-8", rr.Header().Get("Content-Type"))
+	test.Equal(t, "text/html; charset=utf-8", rr.Result().Header.Get("Content-Type"))
 	test.Equal(t, "<p>hello</p>", rr.Body.String())
 }
 
@@ -164,6 +200,20 @@ func TestContextJSON(t *testing.T) {
 	test.Equal(t, http.StatusCreated, rr.Code)
 	test.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 	test.Equal(t, `{"name":"shay"}`, rr.Body.String())
+}
+
+func TestContextJSONDoesNotCommitResponseOnMarshalError(t *testing.T) {
+	t.Parallel()
+
+	rr := httptest.NewRecorder()
+	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	err := c.JSON(make(chan int), http.StatusCreated)
+
+	test.NotNil(t, err)
+	test.False(t, c.responseWritten())
+	test.Equal(t, "", rr.Header().Get("Content-Type"))
+	test.Equal(t, "", rr.Body.String())
 }
 
 func TestContextJSONPretty(t *testing.T) {
@@ -255,6 +305,7 @@ func TestContextWriterFlush(t *testing.T) {
 	c.Writer().(http.Flusher).Flush()
 
 	test.True(t, w.flushed)
+	test.True(t, c.responseWritten())
 }
 
 func TestContextWriterFlushUnsupported(t *testing.T) {
@@ -266,6 +317,60 @@ func TestContextWriterFlushUnsupported(t *testing.T) {
 	c.Writer().(http.Flusher).Flush()
 
 	test.False(t, w.wrote)
+	test.False(t, c.responseWritten())
+}
+
+func TestContextWriterAllowsInformationalResponses(t *testing.T) {
+	t.Parallel()
+
+	w := &basicWriter{header: make(http.Header)}
+	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	c.Status(http.StatusEarlyHints)
+	c.Status(http.StatusContinue)
+	err := c.String("ok")
+
+	test.NoError(t, err)
+	test.Equal(t, []int{http.StatusEarlyHints, http.StatusContinue, http.StatusOK}, w.codes)
+	test.True(t, c.responseWritten())
+}
+
+func TestContextWriterIgnoresInformationalResponseAfterFinalResponse(t *testing.T) {
+	t.Parallel()
+
+	w := &basicWriter{header: make(http.Header)}
+	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	c.Status(http.StatusCreated)
+	c.Status(http.StatusEarlyHints)
+
+	test.Equal(t, []int{http.StatusCreated}, w.codes)
+	test.True(t, c.responseWritten())
+}
+
+func TestContextWriterTreatsSwitchingProtocolsAsFinalResponse(t *testing.T) {
+	t.Parallel()
+
+	w := &basicWriter{header: make(http.Header)}
+	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	c.Status(http.StatusSwitchingProtocols)
+	c.Status(http.StatusOK)
+	c.Status(http.StatusEarlyHints)
+
+	test.Equal(t, []int{http.StatusSwitchingProtocols}, w.codes)
+	test.True(t, c.responseWritten())
+}
+
+func TestContextWriterUnwrap(t *testing.T) {
+	t.Parallel()
+
+	w := &basicWriter{header: make(http.Header)}
+	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	unwrap := c.Writer().(interface{ Unwrap() http.ResponseWriter })
+
+	test.Same(t, w, unwrap.Unwrap())
 }
 
 func TestContextWriterHijack(t *testing.T) {
@@ -323,6 +428,7 @@ func TestContextWriterPushUnsupported(t *testing.T) {
 type basicWriter struct {
 	header http.Header
 	code   int
+	codes  []int
 	wrote  bool
 }
 
@@ -337,6 +443,7 @@ func (w *basicWriter) Write(b []byte) (int, error) {
 
 func (w *basicWriter) WriteHeader(statusCode int) {
 	w.code = statusCode
+	w.codes = append(w.codes, statusCode)
 }
 
 type interfaceWriter struct {

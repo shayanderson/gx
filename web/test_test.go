@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,19 +14,57 @@ import (
 func TestNewTestServer(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
-	defer ts.Stop()
+	ts := NewTestServer(t)
 
 	test.NotNil(t, ts.Client())
 	test.NotNil(t, ts.Mux())
 	test.NotEmpty(t, ts.URL("/"))
 }
 
+func TestNewTestServerWithOptions(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	maxReadSize := int64(1024)
+	ts := NewTestServer(t, Options{
+		Logger:      slog.New(slog.NewJSONHandler(&logs, nil)),
+		LogPrefix:   "test-api",
+		MaxReadSize: &maxReadSize,
+		ErrorHandler: func(c *Context, err StatusError) {
+			_ = c.String("custom", http.StatusBadRequest)
+		},
+	})
+	ts.Get("/", func(c *Context) error {
+		return Error(http.StatusBadRequest, "bad request")
+	})
+
+	body, status := testServerRequest(t, ts, http.MethodGet, "/")
+
+	test.Equal(t, maxReadSize, ts.server.contextOpts.maxReadSize)
+	test.Equal(t, http.StatusBadRequest, status)
+	test.Equal(t, "custom", body)
+	test.True(
+		t,
+		strings.Contains(logs.String(), `"msg":"test-api: GET http://example.com/ HTTP/1.1`),
+	)
+}
+
+func TestNewTestServerUsesFirstOptions(t *testing.T) {
+	t.Parallel()
+
+	ts := NewTestServer(
+		t,
+		Options{LogPrefix: "first"},
+		Options{LogPrefix: "second"},
+	)
+
+	test.Equal(t, "first", ts.server.opts.LogPrefix)
+}
+
 func TestTestServerURL(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
-	defer ts.Stop()
+	ts := NewTestServer(t)
 
 	url := ts.URL("/hello")
 
@@ -35,7 +75,7 @@ func TestTestServerURL(t *testing.T) {
 func TestTestServerStartAndStop(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
+	ts := NewTestServer(t)
 
 	test.NoError(t, ts.Start())
 	test.NoError(t, ts.Stop())
@@ -44,8 +84,7 @@ func TestTestServerStartAndStop(t *testing.T) {
 func TestTestServerMux(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
-	defer ts.Stop()
+	ts := NewTestServer(t)
 
 	test.Same(t, ts.server.Mux(), ts.Mux())
 }
@@ -53,8 +92,7 @@ func TestTestServerMux(t *testing.T) {
 func TestTestServerHandle(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
-	defer ts.Stop()
+	ts := NewTestServer(t)
 	ts.Handle("GET /hello", func(c *Context) error {
 		return c.String("hello")
 	})
@@ -102,8 +140,7 @@ func TestTestServerMethodHelpers(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ts := NewTestServer()
-			defer ts.Stop()
+			ts := NewTestServer(t)
 			tc.add(ts, tc.path, func(c *Context) error {
 				return c.String(tc.body)
 			})
@@ -119,8 +156,7 @@ func TestTestServerMethodHelpers(t *testing.T) {
 func TestTestServerRouteMiddleware(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
-	defer ts.Stop()
+	ts := NewTestServer(t)
 	ts.Get("/", func(c *Context) error {
 		return c.String(c.Get("route").(string))
 	}, func(next HandlerFunc) HandlerFunc {
@@ -139,8 +175,7 @@ func TestTestServerRouteMiddleware(t *testing.T) {
 func TestTestServerUse(t *testing.T) {
 	t.Parallel()
 
-	ts := NewTestServer()
-	defer ts.Stop()
+	ts := NewTestServer(t)
 	ts.Use(func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
 			c.Writer().Header().Set("X-Test", "true")

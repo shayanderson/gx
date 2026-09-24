@@ -1,8 +1,12 @@
 package web
 
 import (
+	"bytes"
+	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +25,7 @@ func TestNewServer(t *testing.T) {
 	test.Equal(t, ":0", s.opts.Addr)
 	test.Equal(t, 3*time.Second, s.opts.ReadHeaderTimeout)
 	test.Equal(t, 5*time.Second, s.opts.ReadTimeout)
+	test.Equal(t, DefaultShutdownTimeout, s.opts.ShutdownTimeout)
 	test.Equal(t, 5*time.Second, s.opts.WriteTimeout)
 	test.NotNil(t, s.mux)
 	test.NotNil(t, s.server)
@@ -28,20 +33,25 @@ func TestNewServer(t *testing.T) {
 
 func TestNewServerPreservesOptions(t *testing.T) {
 	t.Parallel()
+	maxReadSize := int64(1024)
 
 	s := NewServer(Options{
-		Addr:                ":1234",
-		CertFile:            "cert.pem",
-		CertKeyFile:         "key.pem",
-		IdleTimeout:         time.Second,
-		MaxHeaderBytes:      32 * 1024,
-		MaxHeaderValueCount: 64,
-		ReadHeaderTimeout:   2 * time.Second,
-		ReadTimeout:         3 * time.Second,
-		WriteTimeout:        4 * time.Second,
+		Addr:                    ":1234",
+		AllowNonJSONContentType: true,
+		CertFile:                "cert.pem",
+		CertKeyFile:             "key.pem",
+		IdleTimeout:             time.Second,
+		MaxHeaderBytes:          32 * 1024,
+		MaxHeaderValueCount:     64,
+		ReadHeaderTimeout:       2 * time.Second,
+		ReadTimeout:             3 * time.Second,
+		ShutdownTimeout:         5 * time.Second,
+		WriteTimeout:            4 * time.Second,
+		MaxReadSize:             &maxReadSize,
 	})
 
 	test.Equal(t, ":1234", s.opts.Addr)
+	test.True(t, s.opts.AllowNonJSONContentType)
 	test.Equal(t, "cert.pem", s.opts.CertFile)
 	test.Equal(t, "key.pem", s.opts.CertKeyFile)
 	test.Equal(t, time.Second, s.opts.IdleTimeout)
@@ -49,9 +59,12 @@ func TestNewServerPreservesOptions(t *testing.T) {
 	test.Equal(t, 64, s.opts.MaxHeaderValueCount)
 	test.Equal(t, 2*time.Second, s.opts.ReadHeaderTimeout)
 	test.Equal(t, 3*time.Second, s.opts.ReadTimeout)
+	test.Equal(t, 5*time.Second, s.opts.ShutdownTimeout)
 	test.Equal(t, 4*time.Second, s.opts.WriteTimeout)
 	test.Equal(t, 32*1024, s.server.MaxHeaderBytes)
 	test.Equal(t, 64, s.server.MaxHeaderValueCount)
+	test.True(t, s.contextOpts.allowNonJSONContentType)
+	test.Equal(t, maxReadSize, s.contextOpts.maxReadSize)
 }
 
 func TestServerMux(t *testing.T) {
@@ -76,6 +89,175 @@ func TestServerHandle(t *testing.T) {
 
 	test.Equal(t, http.StatusOK, rr.Code)
 	test.Equal(t, "hello", rr.Body.String())
+}
+
+func TestServerHandler(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{})
+	s.Use(func(next HandlerFunc) HandlerFunc {
+		return func(c *Context) error {
+			c.Writer().Header().Set("X-Middleware", "true")
+			return next(c)
+		}
+	})
+	s.Get("/hello", func(c *Context) error {
+		return c.String("hello")
+	})
+
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/hello", nil))
+
+	test.Equal(t, http.StatusOK, rr.Code)
+	test.Equal(t, "true", rr.Result().Header.Get("X-Middleware"))
+	test.Equal(t, "hello", rr.Body.String())
+}
+
+func TestServerBuildsGlobalMiddlewareOnce(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{})
+	builds := 0
+	s.Use(func(next HandlerFunc) HandlerFunc {
+		builds++
+		return next
+	})
+	s.Get("/", func(c *Context) error {
+		return c.String("ok")
+	})
+
+	for range 2 {
+		s.Handler().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	}
+
+	test.Equal(t, 1, builds)
+}
+
+func TestServerServeHTTPLogsRequest(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	s := NewServer(Options{
+		Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
+		LogPrefix: "public-api",
+	})
+	s.Get("/hello", func(c *Context) error {
+		return c.String("hello")
+	})
+
+	rr := httptest.NewRecorder()
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/hello", nil))
+
+	test.Equal(t, http.StatusOK, rr.Code)
+	test.Equal(t, "hello", rr.Body.String())
+	test.Equal(t, 1, strings.Count(logs.String(), "\n"))
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"public-api: GET http://example.com/hello HTTP/1.1 from 192.0.2.1:1234"`,
+	))
+}
+
+func TestServerServeHTTPLogsTLSRequest(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	s := NewServer(Options{Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
+	s.Get("/hello", func(c *Context) error {
+		return c.String("hello")
+	})
+	req := httptest.NewRequest(http.MethodGet, "/hello", nil)
+	req.TLS = &tls.ConnectionState{}
+
+	s.serveHTTP(httptest.NewRecorder(), req)
+
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"http: GET https://example.com/hello HTTP/1.1 from 192.0.2.1:1234"`,
+	))
+}
+
+func TestServerServeHTTPLogsHandlerError(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	s := NewServer(Options{
+		Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
+		LogPrefix: "public-api",
+	})
+	s.Get("/fail", func(*Context) error {
+		return Error(http.StatusTeapot, "short and stout")
+	})
+
+	rr := httptest.NewRecorder()
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/fail", nil))
+
+	test.Equal(t, http.StatusTeapot, rr.Code)
+	test.Equal(t, `{"error":"short and stout"}`, rr.Body.String())
+	test.Equal(t, 2, strings.Count(logs.String(), "\n"))
+	test.True(t, strings.Contains(logs.String(), `"level":"WARN"`))
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"public-api: GET http://example.com/fail HTTP/1.1 from 192.0.2.1:1234 (418)"`,
+	))
+	test.True(t, strings.Contains(logs.String(), `"err":"short and stout"`))
+}
+
+func TestServerServeHTTPLogsEffectiveErrorStatus(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	s := NewServer(Options{
+		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
+	})
+	s.Get("/fail", func(*Context) error {
+		return Error(http.StatusOK, "bad status")
+	})
+
+	rr := httptest.NewRecorder()
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/fail", nil))
+
+	test.Equal(t, http.StatusInternalServerError, rr.Code)
+	test.True(t, strings.Contains(logs.String(), `"level":"ERROR"`))
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"http: GET http://example.com/fail HTTP/1.1 from 192.0.2.1:1234 (500)"`,
+	))
+	test.True(t, strings.Contains(logs.String(), `"err":"bad status"`))
+	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+}
+
+func TestServerServeHTTPDoesNotExposeInternalError(t *testing.T) {
+	t.Parallel()
+
+	const internalError = "database connection to secret-host failed"
+	var logs bytes.Buffer
+	s := NewServer(Options{Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
+	s.Get("/fail", func(*Context) error {
+		return errors.New(internalError)
+	})
+
+	rr := httptest.NewRecorder()
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/fail", nil))
+
+	test.Equal(t, http.StatusInternalServerError, rr.Code)
+	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+	test.False(t, strings.Contains(rr.Body.String(), internalError))
+	test.True(t, strings.Contains(logs.String(), `"err":"`+internalError+`"`))
+}
+
+func TestServerServeHTTPDoesNotUseDefaultLogger(t *testing.T) {
+	var defaultLogs bytes.Buffer
+	originalDefaultLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&defaultLogs, nil)))
+	t.Cleanup(func() { slog.SetDefault(originalDefaultLogger) })
+
+	s := NewServer(Options{})
+	s.Get("/hello", func(c *Context) error {
+		return c.String("hello")
+	})
+
+	rr := httptest.NewRecorder()
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/hello", nil))
+
+	test.Equal(t, http.StatusOK, rr.Code)
+	test.Equal(t, "hello", rr.Body.String())
+	test.Equal(t, "", defaultLogs.String())
 }
 
 func TestServerMethodHelpers(t *testing.T) {
@@ -140,6 +322,29 @@ func TestServerUse(t *testing.T) {
 	test.Equal(t, 1, len(s.middleware))
 }
 
+func TestServerGlobalMiddlewareResponsePreventsRouteErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{})
+	s.Use(func(next HandlerFunc) HandlerFunc {
+		return func(c *Context) error {
+			if err := c.String("partial", http.StatusCreated); err != nil {
+				return err
+			}
+			return next(c)
+		}
+	})
+	s.Get("/", func(*Context) error {
+		return Error(http.StatusInternalServerError, "failed")
+	})
+	rr := httptest.NewRecorder()
+
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	test.Equal(t, http.StatusCreated, rr.Code)
+	test.Equal(t, "partial", rr.Body.String())
+}
+
 func TestChain(t *testing.T) {
 	t.Parallel()
 
@@ -196,6 +401,21 @@ func TestHandlerFuncServeStatusError(t *testing.T) {
 	test.Equal(t, `{"error":"short and stout"}`, rr.Body.String())
 }
 
+func TestHandlerFuncServeWrappedStatusError(t *testing.T) {
+	t.Parallel()
+
+	rr := httptest.NewRecorder()
+	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	h := HandlerFunc(func(*Context) error {
+		return fmt.Errorf("load resource: %w", Error(http.StatusNotFound, "not found"))
+	})
+
+	h.Serve(c)
+
+	test.Equal(t, http.StatusNotFound, rr.Code)
+	test.Equal(t, `{"error":"not found"}`, rr.Body.String())
+}
+
 func TestHandlerFuncServeErrorDefaultsToInternalServerError(t *testing.T) {
 	t.Parallel()
 
@@ -208,7 +428,7 @@ func TestHandlerFuncServeErrorDefaultsToInternalServerError(t *testing.T) {
 	h.Serve(c)
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
-	test.Equal(t, `{"error":"failed"}`, rr.Body.String())
+	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
 }
 
 func TestHandlerFuncServeInvalidStatusErrorDefaultsToInternalServerError(t *testing.T) {
@@ -223,43 +443,188 @@ func TestHandlerFuncServeInvalidStatusErrorDefaultsToInternalServerError(t *test
 	h.Serve(c)
 
 	test.Equal(t, http.StatusInternalServerError, rr.Code)
-	test.Equal(t, `{"error":"bad status"}`, rr.Body.String())
+	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
 }
 
-func TestHandlerFuncServePanicsWhenErrorResponseWriteFails(t *testing.T) {
+func TestHandlerFuncServeUnknownServerErrorUsesGenericMessage(t *testing.T) {
 	t.Parallel()
 
-	c := NewContext(
+	rr := httptest.NewRecorder()
+	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	h := HandlerFunc(func(*Context) error {
+		return Error(599, "unexpected error")
+	})
+
+	h.Serve(c)
+
+	test.Equal(t, 599, rr.Code)
+	test.Equal(t, `{"error":"internal server error"}`, rr.Body.String())
+}
+
+func TestHandlerFuncServeDoesNotWriteErrorAfterResponse(t *testing.T) {
+	t.Parallel()
+
+	rr := httptest.NewRecorder()
+	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	h := HandlerFunc(func(c *Context) error {
+		if err := c.String("partial", http.StatusCreated); err != nil {
+			return err
+		}
+		return Error(http.StatusInternalServerError, "failed")
+	})
+
+	h.Serve(c)
+
+	test.Equal(t, http.StatusCreated, rr.Code)
+	test.Equal(t, "partial", rr.Body.String())
+}
+
+func TestHandlerFuncServeDoesNotWriteErrorAfterFlush(t *testing.T) {
+	t.Parallel()
+
+	w := &interfaceWriter{basicWriter: basicWriter{header: make(http.Header)}}
+	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	h := HandlerFunc(func(c *Context) error {
+		c.Writer().(http.Flusher).Flush()
+		return Error(http.StatusInternalServerError, "failed")
+	})
+
+	h.Serve(c)
+
+	test.True(t, w.flushed)
+	test.False(t, w.wrote)
+}
+
+func TestHandlerFuncServeLogsErrorResponseWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	c := newContext(
 		&failingWriter{header: make(http.Header)},
 		httptest.NewRequest(http.MethodGet, "/", nil),
+		contextOptions{
+			logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
+			logPrefix: "http",
+		},
 	)
 	h := HandlerFunc(func(c *Context) error {
 		return errors.New("failed")
 	})
 
-	test.Panics(t, func() {
-		h.Serve(c)
-	})
+	h.Serve(c)
+
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"http: failed to write error response"`,
+	))
+	logLines := strings.Split(strings.TrimSpace(logs.String()), "\n")
+	test.Equal(t, 2, len(logLines))
+	test.True(t, strings.Contains(logLines[1], `"err":`))
 }
 
-func TestHandlerFuncServeCustomErrorHandler(t *testing.T) {
-	original := ErrorHandler
-	defer func() { ErrorHandler = original }()
-	rr := httptest.NewRecorder()
-	c := NewContext(rr, httptest.NewRequest(http.MethodGet, "/", nil))
-	ErrorHandler = func(c *Context, err StatusError) {
+func TestServerErrorHandler(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{ErrorHandler: func(c *Context, err StatusError) {
 		test.Equal(t, http.StatusBadRequest, err.Status())
 		test.Equal(t, "bad", err.Error())
 		_ = c.String("custom", http.StatusBadRequest)
-	}
-	h := HandlerFunc(func(c *Context) error {
+	}})
+	s.Get("/", func(c *Context) error {
 		return Error(http.StatusBadRequest, "bad")
 	})
+	rr := httptest.NewRecorder()
 
-	h.Serve(c)
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	test.Equal(t, http.StatusBadRequest, rr.Code)
 	test.Equal(t, "custom", rr.Body.String())
+}
+
+func TestServerErrorHandlerDoesNotRunAfterResponse(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	s := NewServer(Options{ErrorHandler: func(*Context, StatusError) {
+		called = true
+	}})
+	s.Get("/", func(c *Context) error {
+		if err := c.String("partial", http.StatusCreated); err != nil {
+			return err
+		}
+		return Error(http.StatusInternalServerError, "failed")
+	})
+	rr := httptest.NewRecorder()
+
+	s.serveHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	test.False(t, called)
+	test.Equal(t, http.StatusCreated, rr.Code)
+	test.Equal(t, "partial", rr.Body.String())
+}
+
+func TestServerBindErrorResponses(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		body        string
+		maxReadSize *int64
+		status      int
+	}{
+		{
+			name:   "invalid JSON",
+			body:   `{`,
+			status: http.StatusBadRequest,
+		},
+		{
+			name:        "body too large",
+			body:        `{"name":"shay"}`,
+			maxReadSize: int64Ptr(7),
+			status:      http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewServer(Options{MaxReadSize: tc.maxReadSize})
+			s.Post("/", func(c *Context) error {
+				return c.Bind(&struct{}{})
+			})
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			s.Handler().ServeHTTP(rr, req)
+
+			test.Equal(t, tc.status, rr.Code)
+		})
+	}
+}
+
+func TestServerBindAllowsNonJSONContentType(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{AllowNonJSONContentType: true})
+	s.Post("/", func(c *Context) error {
+		var body struct {
+			Name string `json:"name"`
+		}
+		if err := c.Bind(&body); err != nil {
+			return err
+		}
+		return c.String(body.Name)
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"shay"}`))
+	rr := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(rr, req)
+
+	test.Equal(t, http.StatusOK, rr.Code)
+	test.Equal(t, "shay", rr.Body.String())
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 func TestHandlerFuncServeHTTP(t *testing.T) {
@@ -290,7 +655,6 @@ func TestServerStart(t *testing.T) {
 	})
 	s.Use(func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
-			test.True(t, c.isMiddleware())
 			c.Writer().Header().Set("X-Middleware", "true")
 			return next(c)
 		}
