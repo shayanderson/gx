@@ -144,6 +144,22 @@ func ErrorIs(t TestingT, err, target error, msgAndArgs ...any) {
 	}
 }
 
+// ErrorMessage asserts that err has the expected error message.
+func ErrorMessage(t TestingT, err error, expected string, msgAndArgs ...any) {
+	t.Helper()
+	if err == nil {
+		fail(t, fmt.Sprintf("expected error message %q, got nil", expected), msgAndArgs...)
+		return
+	}
+	if err.Error() != expected {
+		fail(
+			t,
+			fmt.Sprintf("expected error message %q, got %q", expected, err.Error()),
+			msgAndArgs...,
+		)
+	}
+}
+
 // False asserts that the given condition is false.
 func False(t TestingT, condition bool, msgAndArgs ...any) {
 	t.Helper()

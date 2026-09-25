@@ -104,6 +104,26 @@ func TestErrorIs(t *testing.T) {
 	expectPass(t, func(f *fakeT) { ErrorIs(f, nil, nil) })
 }
 
+func TestErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	expectPass(
+		t,
+		func(f *fakeT) { ErrorMessage(f, errors.New("agent id is empty"), "agent id is empty") },
+	)
+	expectFail(t, func(f *fakeT) { ErrorMessage(f, nil, "agent id is empty") })
+
+	f := expectFail(t, func(f *fakeT) {
+		ErrorMessage(f, errors.New("different message"), "agent id is empty")
+	})
+	if !strings.Contains(
+		f.msg,
+		`expected error message "agent id is empty", got "different message"`,
+	) {
+		t.Fatalf("unexpected error message assertion failure: %s", f.msg)
+	}
+}
+
 func TestFalse(t *testing.T) {
 	t.Parallel()
 
