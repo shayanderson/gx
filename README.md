@@ -408,7 +408,7 @@ Error response. Pass a status to return its generic message, such as
 Logging is opt-in: set `Logger` to receive request and error logs or leave it nil to disable
 logging. `LogPrefix` defaults to `"http"` when a logger is configured.
 
-`MaxReadSize` limits the bytes `Context.Bind` reads from a request body. A nil value uses the
-5 MB default. Set it to `0` to disable the limit.
+`MaxReadSize` limits the bytes `Context.Bind` reads from a request body. A value of `0` uses the
+5 MB default. Set a negative value to disable the limit, or a positive value to set a custom limit.
 
 `ShutdownTimeout` controls how long `Stop` waits for in-flight requests and defaults to 2 seconds.

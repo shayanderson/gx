@@ -1,6 +1,7 @@
 package test
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"reflect"
@@ -8,23 +9,16 @@ import (
 	"strings"
 )
 
-// TestingT abstracts *testing.T so assertions can be tested directly
+// TestingT abstracts *testing.T so assertions can be tested directly.
 type TestingT interface {
-	// Fatal is called when an assertion fails
+	// Fatal is called when an assertion fails.
 	Fatal(args ...any)
-	// Helper marks the calling function as a test helper function
+
+	// Helper marks the calling function as a test helper function.
 	Helper()
 }
 
-// Ordered is a constraint that permits any type that supports the <, <=, >, >= operators
-type Ordered interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
-		~float32 | ~float64 |
-		~string
-}
-
-// formatMsg formats the optional message and arguments for inclusion in the fail message
+// formatMsg formats the optional message and arguments for inclusion in the fail message.
 func formatMsg(msgAndArgs ...any) string {
 	if len(msgAndArgs) == 0 {
 		return ""
@@ -32,10 +26,13 @@ func formatMsg(msgAndArgs ...any) string {
 	if len(msgAndArgs) == 1 {
 		return fmt.Sprintf(": %v", msgAndArgs[0])
 	}
-	return fmt.Sprintf(": "+msgAndArgs[0].(string), msgAndArgs[1:]...)
+	if format, ok := msgAndArgs[0].(string); ok {
+		return fmt.Sprintf(": "+format, msgAndArgs[1:]...)
+	}
+	return ": " + fmt.Sprint(msgAndArgs...)
 }
 
-// fail constructs a detailed error message including a stack trace and fails the test
+// fail constructs a detailed error message including a stack trace and fails the test.
 func fail(t TestingT, msg string, msgAndArgs ...any) {
 	t.Helper()
 
@@ -67,13 +64,21 @@ func fail(t TestingT, msg string, msgAndArgs ...any) {
 	t.Fatal(b.String())
 }
 
-// Contains asserts that haystack contains needle
+// Contains asserts that haystack contains needle.
 func Contains(t TestingT, haystack, needle any, msgAndArgs ...any) {
 	t.Helper()
 	v := reflect.ValueOf(haystack)
 	switch v.Kind() {
 	case reflect.String:
-		if !strings.Contains(v.String(), fmt.Sprint(needle)) {
+		needleString, ok := needle.(string)
+		if !ok {
+			fail(
+				t,
+				fmt.Sprintf("string haystack requires string needle, got %T", needle),
+				msgAndArgs...)
+			return
+		}
+		if !strings.Contains(v.String(), needleString) {
 			fail(t, fmt.Sprintf("expected '%s' to contain '%s'", haystack, needle), msgAndArgs...)
 		}
 	case reflect.Slice, reflect.Array:
@@ -95,7 +100,7 @@ func Contains(t TestingT, haystack, needle any, msgAndArgs ...any) {
 	}
 }
 
-// Empty asserts that the given string is empty
+// Empty asserts that the given string is empty.
 func Empty(t TestingT, s string, msgAndArgs ...any) {
 	t.Helper()
 	if s != "" {
@@ -103,7 +108,8 @@ func Empty(t TestingT, s string, msgAndArgs ...any) {
 	}
 }
 
-// Equal asserts that the expected and actual values are equal
+// Equal asserts that expected and actual are deeply equal according to reflect.DeepEqual.
+// Use time.Time.Equal for instant comparisons and math.IsNaN for NaN values.
 func Equal[T any](t TestingT, expected, actual T, msgAndArgs ...any) {
 	t.Helper()
 	if !reflect.DeepEqual(expected, actual) {
@@ -115,30 +121,30 @@ func Equal[T any](t TestingT, expected, actual T, msgAndArgs ...any) {
 	}
 }
 
-// Error asserts that the actual error matches the expected error
-func Error(t TestingT, actual error, expected error, msgAndArgs ...any) {
+// ErrorIs asserts that err matches target according to errors.Is.
+func ErrorIs(t TestingT, err, target error, msgAndArgs ...any) {
 	t.Helper()
-	if actual == nil && expected == nil {
+	if err == nil && target == nil {
 		return
 	}
-	if actual == nil || expected == nil {
+	if err == nil || target == nil {
 		fail(
 			t,
-			fmt.Sprintf("one error is nil: expected '%v', got '%v'", expected, actual),
+			fmt.Sprintf("one error is nil: expected '%v', got '%v'", target, err),
 			msgAndArgs...,
 		)
 		return
 	}
-	if !errors.Is(actual, expected) && actual.Error() != expected.Error() {
+	if !errors.Is(err, target) {
 		fail(
 			t,
-			fmt.Sprintf("expected error '%v', got '%v'", expected, actual),
+			fmt.Sprintf("expected error '%v', got '%v'", target, err),
 			msgAndArgs...,
 		)
 	}
 }
 
-// False asserts that the given condition is false
+// False asserts that the given condition is false.
 func False(t TestingT, condition bool, msgAndArgs ...any) {
 	t.Helper()
 	if condition {
@@ -146,28 +152,31 @@ func False(t TestingT, condition bool, msgAndArgs ...any) {
 	}
 }
 
-// Greater asserts that actual is greater than min
-func Greater[T Ordered](t TestingT, actual, min T, msgAndArgs ...any) {
+// Greater asserts that actual is greater than minimum.
+func Greater[T cmp.Ordered](t TestingT, actual, minimum T, msgAndArgs ...any) {
 	t.Helper()
-	if !(actual > min) {
-		fail(t, fmt.Sprintf("expected '%v' to be greater than '%v'", actual, min), msgAndArgs...)
+	if !(actual > minimum) {
+		fail(
+			t,
+			fmt.Sprintf("expected '%v' to be greater than '%v'", actual, minimum),
+			msgAndArgs...)
 	}
 }
 
-// GreaterOrEqual asserts that actual is greater than or equal to min
-func GreaterOrEqual[T Ordered](t TestingT, actual, min T, msgAndArgs ...any) {
+// GreaterOrEqual asserts that actual is greater than or equal to minimum.
+func GreaterOrEqual[T cmp.Ordered](t TestingT, actual, minimum T, msgAndArgs ...any) {
 	t.Helper()
-	if !(actual >= min) {
+	if !(actual >= minimum) {
 		fail(
 			t,
-			fmt.Sprintf("expected '%v' to be greater than or equal to '%v'", actual, min),
+			fmt.Sprintf("expected '%v' to be greater than or equal to '%v'", actual, minimum),
 			msgAndArgs...,
 		)
 	}
 }
 
-// Len asserts that the given object's length matches the expected length
-func Len(t TestingT, object any, expected int, msgAndArgs ...any) {
+// Len asserts that expected matches object's length.
+func Len(t TestingT, expected int, object any, msgAndArgs ...any) {
 	t.Helper()
 	v := reflect.ValueOf(object)
 	switch v.Kind() {
@@ -189,27 +198,27 @@ func Len(t TestingT, object any, expected int, msgAndArgs ...any) {
 	}
 }
 
-// Less asserts that actual is less than max
-func Less[T Ordered](t TestingT, actual, max T, msgAndArgs ...any) {
+// Less asserts that actual is less than maximum.
+func Less[T cmp.Ordered](t TestingT, actual, maximum T, msgAndArgs ...any) {
 	t.Helper()
-	if !(actual < max) {
-		fail(t, fmt.Sprintf("expected '%v' to be less than '%v'", actual, max), msgAndArgs...)
+	if !(actual < maximum) {
+		fail(t, fmt.Sprintf("expected '%v' to be less than '%v'", actual, maximum), msgAndArgs...)
 	}
 }
 
-// LessOrEqual asserts that actual is less than or equal to max
-func LessOrEqual[T Ordered](t TestingT, actual, max T, msgAndArgs ...any) {
+// LessOrEqual asserts that actual is less than or equal to maximum.
+func LessOrEqual[T cmp.Ordered](t TestingT, actual, maximum T, msgAndArgs ...any) {
 	t.Helper()
-	if !(actual <= max) {
+	if !(actual <= maximum) {
 		fail(
 			t,
-			fmt.Sprintf("expected '%v' to be less than or equal to '%v'", actual, max),
+			fmt.Sprintf("expected '%v' to be less than or equal to '%v'", actual, maximum),
 			msgAndArgs...,
 		)
 	}
 }
 
-// Nil asserts that the given value is nil
+// Nil asserts that the given value is nil.
 func Nil(t TestingT, v any, msgAndArgs ...any) {
 	t.Helper()
 	if v == nil {
@@ -221,11 +230,15 @@ func Nil(t TestingT, v any, msgAndArgs ...any) {
 		if rv.IsNil() {
 			return
 		}
+	case reflect.UnsafePointer:
+		if rv.Pointer() == 0 {
+			return
+		}
 	}
 	fail(t, "value is not nil", msgAndArgs...)
 }
 
-// NoError asserts that the given error is nil
+// NoError asserts that the given error is nil.
 func NoError(t TestingT, err error, msgAndArgs ...any) {
 	t.Helper()
 	if err != nil {
@@ -233,7 +246,7 @@ func NoError(t TestingT, err error, msgAndArgs ...any) {
 	}
 }
 
-// NotEmpty asserts that the given string is not empty
+// NotEmpty asserts that the given string is not empty.
 func NotEmpty(t TestingT, s string, msgAndArgs ...any) {
 	t.Helper()
 	if s == "" {
@@ -241,7 +254,7 @@ func NotEmpty(t TestingT, s string, msgAndArgs ...any) {
 	}
 }
 
-// NotEqual asserts that the expected and actual values are not equal
+// NotEqual asserts that expected and actual are not deeply equal according to reflect.DeepEqual.
 func NotEqual[T any](t TestingT, expected, actual T, msgAndArgs ...any) {
 	t.Helper()
 	if reflect.DeepEqual(expected, actual) {
@@ -249,11 +262,12 @@ func NotEqual[T any](t TestingT, expected, actual T, msgAndArgs ...any) {
 	}
 }
 
-// NotNil asserts that the given value is not nil
+// NotNil asserts that the given value is not nil.
 func NotNil(t TestingT, v any, msgAndArgs ...any) {
 	t.Helper()
 	if v == nil {
 		fail(t, "value is nil", msgAndArgs...)
+		return
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
@@ -261,11 +275,16 @@ func NotNil(t TestingT, v any, msgAndArgs ...any) {
 		if rv.IsNil() {
 			fail(t, "value is nil", msgAndArgs...)
 		}
+	case reflect.UnsafePointer:
+		if rv.Pointer() == 0 {
+			fail(t, "value is nil", msgAndArgs...)
+		}
 	}
 }
 
-// Panics asserts that the given function panics
+// Panics asserts that the given function panics.
 func Panics(t TestingT, f func(), msgAndArgs ...any) {
+	t.Helper()
 	defer func() {
 		if r := recover(); r == nil {
 			fail(t, "expected panic, but function did not panic", msgAndArgs...)
@@ -274,7 +293,9 @@ func Panics(t TestingT, f func(), msgAndArgs ...any) {
 	f()
 }
 
-// Same asserts that expected and actual refer to the same object
+// Same asserts that expected and actual refer to the same object or slice view.
+// Zero-length slices and zero-size values are rejected because their identity is
+// not reliably observable.
 func Same(t TestingT, expected, actual any, msgAndArgs ...any) {
 	t.Helper()
 
@@ -304,12 +325,41 @@ func Same(t TestingT, expected, actual any, msgAndArgs ...any) {
 	}
 
 	switch ev.Kind() {
-	case reflect.Pointer,
-		reflect.Map,
-		reflect.Slice,
-		reflect.Func,
-		reflect.Chan:
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		if ev.IsNil() && av.IsNil() {
+			return
+		}
+	}
 
+	switch ev.Kind() {
+	case reflect.Pointer:
+		if ev.Type().Elem().Size() == 0 {
+			fail(t, "Same cannot determine identity for zero-size values", msgAndArgs...)
+			return
+		}
+		if ev.Pointer() != av.Pointer() {
+			fail(
+				t,
+				fmt.Sprintf(
+					"expected same object, got '%#x' and '%#x'", ev.Pointer(), av.Pointer(),
+				),
+				msgAndArgs...,
+			)
+		}
+
+	case reflect.Slice:
+		if ev.Len() == 0 || ev.Type().Elem().Size() == 0 {
+			fail(
+				t,
+				"Same cannot determine identity for zero-length or zero-size slices",
+				msgAndArgs...)
+			return
+		}
+		if ev.Pointer() != av.Pointer() || ev.Len() != av.Len() || ev.Cap() != av.Cap() {
+			fail(t, "expected same slice view", msgAndArgs...)
+		}
+
+	case reflect.Map, reflect.Func, reflect.Chan:
 		if ev.Pointer() != av.Pointer() {
 			fail(
 				t,
@@ -329,7 +379,7 @@ func Same(t TestingT, expected, actual any, msgAndArgs ...any) {
 	}
 }
 
-// True asserts that the given condition is true
+// True asserts that the given condition is true.
 func True(t TestingT, condition bool, msgAndArgs ...any) {
 	t.Helper()
 	if !condition {
@@ -337,12 +387,12 @@ func True(t TestingT, condition bool, msgAndArgs ...any) {
 	}
 }
 
-// Type asserts that the types of a and b are the same
-func Type(t TestingT, a, b any, msgAndArgs ...any) {
+// Type asserts that expected and actual have the same dynamic type.
+func Type(t TestingT, expected, actual any, msgAndArgs ...any) {
 	t.Helper()
-	ta := reflect.TypeOf(a)
-	tb := reflect.TypeOf(b)
-	if ta != tb {
-		fail(t, fmt.Sprintf("expected type %v but got %v", tb, ta), msgAndArgs...)
+	expectedType := reflect.TypeOf(expected)
+	actualType := reflect.TypeOf(actual)
+	if expectedType != actualType {
+		fail(t, fmt.Sprintf("expected type %v but got %v", expectedType, actualType), msgAndArgs...)
 	}
 }

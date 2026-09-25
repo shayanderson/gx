@@ -56,7 +56,7 @@ func TestDispatcherDispatchError(t *testing.T) {
 		return nil
 	})
 
-	test.Error(t, d.Dispatch(t.Context(), 123), errStop)
+	test.ErrorIs(t, d.Dispatch(t.Context(), 123), errStop)
 	test.Equal(t, []int{1, 2}, values)
 }
 

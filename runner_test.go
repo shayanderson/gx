@@ -57,7 +57,7 @@ func TestRunnerError(t *testing.T) {
 		t.Fatal("context was not canceled after first error")
 	}
 
-	test.Error(t, runner.Wait(), errFirst)
+	test.ErrorIs(t, runner.Wait(), errFirst)
 
-	test.Error(t, context.Cause(ctx), errFirst)
+	test.ErrorIs(t, context.Cause(ctx), errFirst)
 }

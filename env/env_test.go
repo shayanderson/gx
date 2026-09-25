@@ -1,6 +1,8 @@
 package env
 
 import (
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -55,6 +57,26 @@ func TestDuration(t *testing.T) {
 	test.Equal(t, time.Minute, Duration("TEST_DURATION_MISSING", time.Minute))
 }
 
+func TestScalarValuesDoNotTrimWhitespace(t *testing.T) {
+	t.Setenv("TEST_BOOL_WHITESPACE", " true ")
+	t.Setenv("TEST_DURATION_WHITESPACE", " 1s ")
+	t.Setenv("TEST_FLOAT64_WHITESPACE", " 3.14 ")
+	t.Setenv("TEST_INT_WHITESPACE", " 42 ")
+
+	t.Run("bool", func(t *testing.T) {
+		test.False(t, Bool("TEST_BOOL_WHITESPACE", false))
+	})
+	t.Run("duration", func(t *testing.T) {
+		test.Equal(t, time.Minute, Duration("TEST_DURATION_WHITESPACE", time.Minute))
+	})
+	t.Run("float64", func(t *testing.T) {
+		test.Equal(t, 1.5, Float64("TEST_FLOAT64_WHITESPACE", 1.5))
+	})
+	t.Run("int", func(t *testing.T) {
+		test.Equal(t, 7, Int("TEST_INT_WHITESPACE", 7))
+	})
+}
+
 func TestFloat64(t *testing.T) {
 	t.Setenv("TEST_FLOAT64_VALID", "3.14")
 	t.Setenv("TEST_FLOAT64_INVALID", "abc")
@@ -64,6 +86,14 @@ func TestFloat64(t *testing.T) {
 	test.Equal(t, 9.5, Float64("TEST_FLOAT64_MISSING", 9.5))
 }
 
+func TestFloat64AllowsNonFiniteValues(t *testing.T) {
+	t.Setenv("TEST_FLOAT64_NAN", "NaN")
+	t.Setenv("TEST_FLOAT64_INF", "+Inf")
+
+	test.True(t, math.IsNaN(Float64("TEST_FLOAT64_NAN", 1)))
+	test.True(t, math.IsInf(Float64("TEST_FLOAT64_INF", 1), 1))
+}
+
 func TestInt(t *testing.T) {
 	t.Setenv("TEST_INT_VALID", "42")
 	t.Setenv("TEST_INT_INVALID", "abc")
@@ -71,6 +101,12 @@ func TestInt(t *testing.T) {
 	test.Equal(t, 42, Int("TEST_INT_VALID", 1))
 	test.Equal(t, 7, Int("TEST_INT_INVALID", 7))
 	test.Equal(t, 9, Int("TEST_INT_MISSING", 9))
+}
+
+func TestIntOverflowUsesFallback(t *testing.T) {
+	t.Setenv("TEST_INT_OVERFLOW", strconv.FormatInt(int64(^uint(0)>>1), 10)+"0")
+
+	test.Equal(t, 7, Int("TEST_INT_OVERFLOW", 7))
 }
 
 func TestMustBool(t *testing.T) {
@@ -144,6 +180,14 @@ func TestMustFloat64(t *testing.T) {
 	test.Equal(t, 123.45, MustFloat64("TEST_MUST_FLOAT64_VALID"))
 }
 
+func TestMustFloat64AllowsNonFiniteValues(t *testing.T) {
+	t.Setenv("TEST_MUST_FLOAT64_NAN", "NaN")
+	t.Setenv("TEST_MUST_FLOAT64_INF", "+Inf")
+
+	test.True(t, math.IsNaN(MustFloat64("TEST_MUST_FLOAT64_NAN")))
+	test.True(t, math.IsInf(MustFloat64("TEST_MUST_FLOAT64_INF"), 1))
+}
+
 func TestMustFloat64Panic(t *testing.T) {
 	test.Panics(t, func() { MustFloat64("TEST_MUST_FLOAT64_MISSING") })
 }
@@ -209,12 +253,15 @@ func TestMustStringsEmptyPanic(t *testing.T) {
 
 func TestString(t *testing.T) {
 	t.Setenv("TEST_STRING", "hello")
+	t.Setenv("TEST_STRING_EMPTY", "")
 	test.Equal(t, "hello", String("TEST_STRING", "fallback"))
 	test.Equal(t, "fallback", String("TEST_STRING_MISSING", "fallback"))
+	test.Equal(t, "", String("TEST_STRING_EMPTY", "fallback"))
 }
 
 func TestStrings(t *testing.T) {
 	t.Setenv("TEST_STRINGS", " one, two ,, three ")
+	t.Setenv("TEST_STRINGS_EMPTY", "")
 	got := Strings("TEST_STRINGS", []string{"fallback"})
 	want := []string{"one", "two", "three"}
 	test.Equal(t, want, got)
@@ -222,6 +269,7 @@ func TestStrings(t *testing.T) {
 	fallback := []string{"fallback", "values"}
 	got = Strings("TEST_STRINGS_MISSING", fallback)
 	test.Equal(t, fallback, got)
+	test.Equal(t, []string{}, Strings("TEST_STRINGS_EMPTY", fallback))
 }
 
 func TestSplitAndTrim(t *testing.T) {

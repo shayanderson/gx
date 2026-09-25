@@ -438,7 +438,7 @@ func TestContextWriterPushUnsupported(t *testing.T) {
 
 	err := c.Writer().(http.Pusher).Push("/asset.css", nil)
 
-	test.Error(t, err, http.ErrNotSupported)
+	test.ErrorIs(t, err, http.ErrNotSupported)
 }
 
 type basicWriter struct {

@@ -25,11 +25,11 @@ func TestNewTestServerWithOptions(t *testing.T) {
 	t.Parallel()
 
 	var logs bytes.Buffer
-	maxReadSize := int64(1024)
+	const maxReadSize int64 = 1024
 	ts := NewTestServer(t, Options{
 		Logger:      slog.New(slog.NewJSONHandler(&logs, nil)),
 		LogPrefix:   "test-api",
-		MaxReadSize: &maxReadSize,
+		MaxReadSize: maxReadSize,
 		ErrorHandler: func(c *Context, err StatusError) {
 			_ = c.String("custom", http.StatusBadRequest)
 		},

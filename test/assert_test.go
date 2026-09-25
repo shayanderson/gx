@@ -3,38 +3,53 @@ package test
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 // fakeT simulates *testing.T for internal assert testing
 type fakeT struct {
-	failed bool
-	msg    string
+	failed  bool
+	helperN int
+	msg     string
 }
 
 func (f *fakeT) Fatal(args ...any) {
 	f.failed = true
 	f.msg = fmt.Sprint(args...)
+	runtime.Goexit()
 }
 
-func (f *fakeT) Helper() {}
+func (f *fakeT) Helper() { f.helperN++ }
 
-// expectFail ensures the assert triggers a failure
-func expectFail(t *testing.T, fn func(f *fakeT)) {
+// runAssertion executes an assertion in its own goroutine so fakeT.Fatal can
+// match testing.T.Fatal's Goexit behavior.
+func runAssertion(fn func(f *fakeT)) *fakeT {
+	result := make(chan *fakeT, 1)
+	go func() {
+		f := &fakeT{}
+		defer func() { result <- f }()
+		fn(f)
+	}()
+	return <-result
+}
+
+// expectFail ensures the assert triggers a failure.
+func expectFail(t *testing.T, fn func(f *fakeT)) *fakeT {
 	t.Helper()
-	f := &fakeT{}
-	fn(f)
+	f := runAssertion(fn)
 	if !f.failed {
 		t.Fatalf("expected failure but got none")
 	}
+	return f
 }
 
-// expectPass ensures the assert does not trigger a failure
+// expectPass ensures the assert does not trigger a failure.
 func expectPass(t *testing.T, fn func(f *fakeT)) {
 	t.Helper()
-	f := &fakeT{}
-	fn(f)
+	f := runAssertion(fn)
 	if f.failed {
 		t.Fatalf("expected pass but it failed: %v", f.msg)
 	}
@@ -45,6 +60,7 @@ func TestContains(t *testing.T) {
 
 	expectPass(t, func(f *fakeT) { Contains(f, "hello world", "world") })
 	expectFail(t, func(f *fakeT) { Contains(f, "hello", "nope") })
+	expectFail(t, func(f *fakeT) { Contains(f, "abc", 'a') })
 
 	expectPass(t, func(f *fakeT) { Contains(f, []int{1, 2, 3}, 2) })
 	expectFail(t, func(f *fakeT) { Contains(f, []int{1, 2, 3}, 4) })
@@ -69,19 +85,23 @@ func TestEqual(t *testing.T) {
 	expectFail(t, func(f *fakeT) { Equal(f, 5, 6) })
 }
 
-func TestError(t *testing.T) {
+func TestErrorIs(t *testing.T) {
 	t.Parallel()
 
 	e1 := errors.New("a")
 	e2 := errors.New("a")
 	e3 := errors.New("b")
 
-	expectPass(t, func(f *fakeT) { Error(f, e1, e1) })
-	expectPass(t, func(f *fakeT) { Error(f, e1, e2) })
-	expectFail(t, func(f *fakeT) { Error(f, e1, e3) })
-	expectFail(t, func(f *fakeT) { Error(f, e1, nil) })
-	expectFail(t, func(f *fakeT) { Error(f, nil, e1) })
-	expectPass(t, func(f *fakeT) { Error(f, nil, nil) })
+	expectPass(t, func(f *fakeT) { ErrorIs(f, e1, e1) })
+	expectPass(t, func(f *fakeT) { ErrorIs(f, fmt.Errorf("wrapped: %w", e1), e1) })
+	expectFail(t, func(f *fakeT) { ErrorIs(f, e1, e2) })
+	f := expectFail(t, func(f *fakeT) { ErrorIs(f, e1, e3) })
+	if !strings.Contains(f.msg, "expected error 'b', got 'a'") {
+		t.Fatalf("unexpected error assertion message: %s", f.msg)
+	}
+	expectFail(t, func(f *fakeT) { ErrorIs(f, e1, nil) })
+	expectFail(t, func(f *fakeT) { ErrorIs(f, nil, e1) })
+	expectPass(t, func(f *fakeT) { ErrorIs(f, nil, nil) })
 }
 
 func TestFalse(t *testing.T) {
@@ -108,9 +128,9 @@ func TestGreaterOrEqual(t *testing.T) {
 func TestLen(t *testing.T) {
 	t.Parallel()
 
-	expectPass(t, func(f *fakeT) { Len(f, []int{1, 2, 3}, 3) })
-	expectFail(t, func(f *fakeT) { Len(f, []int{1}, 2) })
-	expectFail(t, func(f *fakeT) { Len(f, 123, 1) })
+	expectPass(t, func(f *fakeT) { Len(f, 3, []int{1, 2, 3}) })
+	expectFail(t, func(f *fakeT) { Len(f, 2, []int{1}) })
+	expectFail(t, func(f *fakeT) { Len(f, 1, 123) })
 }
 
 func TestLess(t *testing.T) {
@@ -135,12 +155,14 @@ func TestNil(t *testing.T) {
 	var m map[string]int
 	var s []string
 	var f func()
+	var unsafePtr unsafe.Pointer
 
 	expectPass(t, func(fa *fakeT) { Nil(fa, nil) })
 	expectPass(t, func(fa *fakeT) { Nil(fa, p) })
 	expectPass(t, func(fa *fakeT) { Nil(fa, m) })
 	expectPass(t, func(fa *fakeT) { Nil(fa, s) })
 	expectPass(t, func(fa *fakeT) { Nil(fa, f) })
+	expectPass(t, func(fa *fakeT) { Nil(fa, unsafePtr) })
 	expectFail(t, func(fa *fakeT) { Nil(fa, 1) })
 }
 
@@ -170,10 +192,12 @@ func TestNotNil(t *testing.T) {
 
 	var p *int
 	var m map[string]int
+	var unsafePtr unsafe.Pointer
 	expectPass(t, func(f *fakeT) { NotNil(f, 1) })
 	expectFail(t, func(f *fakeT) { NotNil(f, nil) })
 	expectFail(t, func(f *fakeT) { NotNil(f, p) })
 	expectFail(t, func(f *fakeT) { NotNil(f, m) })
+	expectFail(t, func(f *fakeT) { NotNil(f, unsafePtr) })
 }
 
 func TestPanics(t *testing.T) {
@@ -181,6 +205,12 @@ func TestPanics(t *testing.T) {
 
 	expectPass(t, func(f *fakeT) { Panics(f, func() { panic("ok") }) })
 	expectFail(t, func(f *fakeT) { Panics(f, func() {}) })
+
+	f := &fakeT{}
+	Panics(f, func() { panic("ok") })
+	if f.helperN == 0 {
+		t.Fatal("Panics did not mark itself as a test helper")
+	}
 }
 
 func TestSame(t *testing.T) {
@@ -217,6 +247,54 @@ func TestSame(t *testing.T) {
 
 		expectFail(t, func(f *fakeT) {
 			Same(f, s1, s2)
+		})
+	})
+
+	t.Run("same_backing_array_different_length", func(t *testing.T) {
+		values := []int{1, 2, 3}
+
+		f := expectFail(t, func(f *fakeT) {
+			Same(f, values[:2], values[:3])
+		})
+		if !strings.Contains(f.msg, "expected same slice view") {
+			t.Fatalf("unexpected Same failure message: %s", f.msg)
+		}
+	})
+
+	t.Run("same_backing_array_different_capacity", func(t *testing.T) {
+		values := []int{1, 2, 3}
+
+		expectFail(t, func(f *fakeT) {
+			Same(f, values[:2:2], values[:2:3])
+		})
+	})
+
+	t.Run("empty_slices", func(t *testing.T) {
+		expectFail(t, func(f *fakeT) {
+			Same(f, []int{}, []int{})
+		})
+	})
+
+	t.Run("typed_nil_values", func(t *testing.T) {
+		var slice []int
+		var pointer *struct{}
+
+		expectPass(t, func(f *fakeT) {
+			Same(f, slice, slice)
+		})
+		expectPass(t, func(f *fakeT) {
+			Same(f, pointer, pointer)
+		})
+	})
+
+	t.Run("zero_size_values", func(t *testing.T) {
+		pointer := &struct{}{}
+
+		expectFail(t, func(f *fakeT) {
+			Same(f, pointer, pointer)
+		})
+		expectFail(t, func(f *fakeT) {
+			Same(f, []struct{}{{}}, []struct{}{{}})
 		})
 	})
 
@@ -284,7 +362,8 @@ func TestType(t *testing.T) {
 func TestFormatMsg(t *testing.T) {
 	t.Parallel()
 
-	msg := formatMsg("expected %v but got %v", 5, 6)
+	format := "expected %v but got %v"
+	msg := formatMsg(format, 5, 6)
 	expected := ": expected 5 but got 6"
 	if msg != expected {
 		t.Fatalf("expected '%v' but got '%v'", expected, msg)
@@ -295,14 +374,21 @@ func TestFormatMsg(t *testing.T) {
 	if msg != expected {
 		t.Fatalf("expected '%v' but got '%v'", expected, msg)
 	}
+
+	msg = formatMsg(1, 2)
+	expected = ": 1 2"
+	if msg != expected {
+		t.Fatalf("expected '%v' but got '%v'", expected, msg)
+	}
 }
 
 func TestFailMessage(t *testing.T) {
 	t.Parallel()
 
-	f := &fakeT{}
-
-	fail(f, "values differ", "expected %d", 42)
+	format := "expected %d"
+	f := runAssertion(func(f *fakeT) {
+		fail(f, "values differ", format, 42)
+	})
 
 	if !strings.Contains(f.msg, "assertion failed: values differ: expected 42") {
 		t.Fatalf("unexpected failure message: %s", f.msg)

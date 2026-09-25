@@ -27,13 +27,14 @@ func TestNewServer(t *testing.T) {
 	test.Equal(t, 5*time.Second, s.opts.ReadTimeout)
 	test.Equal(t, DefaultShutdownTimeout, s.opts.ShutdownTimeout)
 	test.Equal(t, 5*time.Second, s.opts.WriteTimeout)
+	test.Equal(t, DefaultMaxReadSize, s.contextOpts.maxReadSize)
 	test.NotNil(t, s.mux)
 	test.NotNil(t, s.server)
 }
 
 func TestNewServerPreservesOptions(t *testing.T) {
 	t.Parallel()
-	maxReadSize := int64(1024)
+	const maxReadSize int64 = 1024
 
 	s := NewServer(Options{
 		Addr:                ":1234",
@@ -46,7 +47,7 @@ func TestNewServerPreservesOptions(t *testing.T) {
 		ReadTimeout:         3 * time.Second,
 		ShutdownTimeout:     5 * time.Second,
 		WriteTimeout:        4 * time.Second,
-		MaxReadSize:         &maxReadSize,
+		MaxReadSize:         maxReadSize,
 	})
 
 	test.Equal(t, ":1234", s.opts.Addr)
@@ -62,6 +63,14 @@ func TestNewServerPreservesOptions(t *testing.T) {
 	test.Equal(t, 32*1024, s.server.MaxHeaderBytes)
 	test.Equal(t, 64, s.server.MaxHeaderValueCount)
 	test.Equal(t, maxReadSize, s.contextOpts.maxReadSize)
+}
+
+func TestNewServerDisablesMaxReadSizeWithNegativeValue(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(Options{MaxReadSize: -1})
+
+	test.Equal(t, int64(0), s.contextOpts.maxReadSize)
 }
 
 func TestServerMux(t *testing.T) {
@@ -507,7 +516,7 @@ func TestHandlerFuncServeDoesNotWriteErrorAfterResponse(t *testing.T) {
 func TestHandlerFuncServeDoesNotWriteErrorAfterFlush(t *testing.T) {
 	t.Parallel()
 
-	w := &interfaceWriter{basicWriter: basicWriter{header: make(http.Header)}}
+	w := &interfaceWriter{header: make(http.Header)}
 	c := NewContext(w, httptest.NewRequest(http.MethodGet, "/", nil))
 	h := HandlerFunc(func(c *Context) error {
 		c.Writer().(http.Flusher).Flush()
@@ -593,7 +602,7 @@ func TestServerBindErrorResponses(t *testing.T) {
 	cases := []struct {
 		name        string
 		body        string
-		maxReadSize *int64
+		maxReadSize int64
 		status      int
 	}{
 		{
@@ -604,7 +613,7 @@ func TestServerBindErrorResponses(t *testing.T) {
 		{
 			name:        "body too large",
 			body:        `{"name":"shay"}`,
-			maxReadSize: int64Ptr(7),
+			maxReadSize: 7,
 			status:      http.StatusRequestEntityTooLarge,
 		},
 	}
@@ -663,10 +672,6 @@ func TestServerBindAnyContentType(t *testing.T) {
 
 	test.Equal(t, http.StatusOK, rr.Code)
 	test.Equal(t, "shay", rr.Body.String())
-}
-
-func int64Ptr(v int64) *int64 {
-	return &v
 }
 
 func TestHandlerFuncServeHTTP(t *testing.T) {

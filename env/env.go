@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// Bool retrieves the boolean value of the environment variable by key
+// Bool retrieves the boolean value of the environment variable by key.
+// It returns fallback when the variable is missing or its value is invalid.
 func Bool(key string, fallback bool) bool {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -20,7 +21,8 @@ func Bool(key string, fallback bool) bool {
 	return b
 }
 
-// Duration retrieves the duration value of the environment variable by key
+// Duration retrieves the duration value of the environment variable by key.
+// It returns fallback when the variable is missing or its value is invalid.
 func Duration(key string, fallback time.Duration) time.Duration {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -33,7 +35,8 @@ func Duration(key string, fallback time.Duration) time.Duration {
 	return d
 }
 
-// Float64 retrieves the float64 value of the environment variable by key
+// Float64 retrieves the float64 value of the environment variable by key.
+// It returns fallback when the variable is missing or its value is invalid.
 func Float64(key string, fallback float64) float64 {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -46,7 +49,8 @@ func Float64(key string, fallback float64) float64 {
 	return f
 }
 
-// Int retrieves the integer value of the environment variable by key
+// Int retrieves the integer value of the environment variable by key.
+// It returns fallback when the variable is missing or its value is invalid.
 func Int(key string, fallback int) int {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -59,8 +63,8 @@ func Int(key string, fallback int) int {
 	return i
 }
 
-// MustBool retrieves the boolean value of the environment variable by key
-// panics if the variable is missing or empty
+// MustBool retrieves the boolean value of the environment variable by key.
+// It panics if the variable is missing, empty, or invalid.
 func MustBool(key string) bool {
 	b, err := strconv.ParseBool(must(key))
 	if err != nil {
@@ -69,8 +73,8 @@ func MustBool(key string) bool {
 	return b
 }
 
-// MustDuration retrieves the duration value of the environment variable by key
-// panics if the variable is missing, empty, or invalid
+// MustDuration retrieves the duration value of the environment variable by key.
+// It panics if the variable is missing, empty, or invalid.
 func MustDuration(key string) time.Duration {
 	d, err := time.ParseDuration(must(key))
 	if err != nil {
@@ -79,8 +83,8 @@ func MustDuration(key string) time.Duration {
 	return d
 }
 
-// MustFloat64 retrieves the float64 value of the environment variable by key
-// panics if the variable is missing, empty, or invalid
+// MustFloat64 retrieves the float64 value of the environment variable by key.
+// It panics if the variable is missing, empty, or invalid.
 func MustFloat64(key string) float64 {
 	f, err := strconv.ParseFloat(must(key), 64)
 	if err != nil {
@@ -89,8 +93,8 @@ func MustFloat64(key string) float64 {
 	return f
 }
 
-// MustInt retrieves the integer value of the environment variable by key
-// panics if the variable is missing, empty, or invalid integer
+// MustInt retrieves the integer value of the environment variable by key.
+// It panics if the variable is missing, empty, or invalid integer.
 func MustInt(key string) int {
 	i, err := strconv.Atoi(must(key))
 	if err != nil {
@@ -99,19 +103,21 @@ func MustInt(key string) int {
 	return i
 }
 
-// MustString retrieves the string value of the environment variable by key
-// panics if the variable is missing or empty
+// MustString retrieves the string value of the environment variable by key.
+// It panics if the variable is missing or empty.
 func MustString(key string) string {
 	return must(key)
 }
 
-// MustStrings retrieves a slice of strings from the environment variable by key, split by comma
-// panics if the variable is missing or empty
+// MustStrings retrieves a slice of strings from the environment variable by key, split by comma.
+// It panics if the variable is missing or empty.
 func MustStrings(key string) []string {
 	return splitAndTrim(must(key), ",")
 }
 
-// String retrieves the string value of the environment variable by key
+// String retrieves the string value of the environment variable by key.
+// It returns fallback only when the variable is missing; an explicitly empty
+// variable returns an empty string.
 func String(key, fallback string) string {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -120,7 +126,9 @@ func String(key, fallback string) string {
 	return v
 }
 
-// Strings retrieves a slice of strings from the environment variable by key, split by comma
+// Strings retrieves a slice of strings from the environment variable by key, split by comma.
+// It returns fallback only when the variable is missing. Empty values produce
+// an empty slice.
 func Strings(key string, fallback []string) []string {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -129,8 +137,8 @@ func Strings(key string, fallback []string) []string {
 	return splitAndTrim(v, ",")
 }
 
-// must retrieves the required environment variable by key
-// panics if the variable is missing or empty
+// must retrieves the required environment variable by key.
+// It panics if the variable is missing or empty.
 func must(key string) string {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
@@ -139,7 +147,7 @@ func must(key string) string {
 	return v
 }
 
-// splitAndTrim splits a string by the given separator and trims whitespace from each element
+// splitAndTrim splits a string by the given separator and trims whitespace from each element.
 func splitAndTrim(s, sep string) []string {
 	parts := make([]string, 0)
 	for v := range strings.SplitSeq(s, sep) {

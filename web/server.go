@@ -104,8 +104,8 @@ type Options struct {
 	ErrorHandler ErrorHandlerFunc
 
 	// MaxReadSize is the maximum number of request-body bytes read by Bind.
-	// A nil value uses DefaultMaxReadSize; a value of 0 disables the limit.
-	MaxReadSize *int64
+	// A value of 0 uses DefaultMaxReadSize. A negative value disables the limit.
+	MaxReadSize int64
 
 	// MaxHeaderBytes is the maximum size of request headers.
 	MaxHeaderBytes int
@@ -161,8 +161,10 @@ func NewServer(opts Options) *Server {
 		logPrefix:    opts.LogPrefix,
 		maxReadSize:  DefaultMaxReadSize,
 	}
-	if opts.MaxReadSize != nil {
-		contextOpts.maxReadSize = *opts.MaxReadSize
+	if opts.MaxReadSize > 0 {
+		contextOpts.maxReadSize = opts.MaxReadSize
+	} else if opts.MaxReadSize < 0 {
+		contextOpts.maxReadSize = 0
 	}
 
 	s := &Server{

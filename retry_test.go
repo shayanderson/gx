@@ -121,7 +121,7 @@ func TestRetryDoReturnsLastError(t *testing.T) {
 		return lastErr
 	})
 
-	test.Error(t, err, lastErr)
+	test.ErrorIs(t, err, lastErr)
 	test.Equal(t, 3, calls)
 }
 
@@ -139,7 +139,7 @@ func TestRetryDoContextCanceled(t *testing.T) {
 		return errors.New("failed")
 	})
 
-	test.Error(t, err, context.Canceled)
+	test.ErrorIs(t, err, context.Canceled)
 	test.Equal(t, 1, calls)
 }
 
@@ -156,7 +156,7 @@ func TestRetryDoZeroDelay(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, failErr)
+	test.ErrorIs(t, err, failErr)
 	test.Equal(t, 3, calls)
 }
 
@@ -179,7 +179,7 @@ func TestRetryDoMaxDelay(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, failErr)
+	test.ErrorIs(t, err, failErr)
 	test.Equal(t, 3, calls)
 	test.GreaterOrEqual(t, time.Since(start), 2*time.Millisecond)
 }
@@ -202,7 +202,7 @@ func TestRetryDoBackoffIncreasesDelay(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, failErr)
+	test.ErrorIs(t, err, failErr)
 	test.Equal(t, 4, calls)
 	test.GreaterOrEqual(t, time.Since(start), 35*time.Millisecond)
 }
@@ -224,7 +224,7 @@ func TestRetryDoAttemptsWinBeforeMaxDuration(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, failErr)
+	test.ErrorIs(t, err, failErr)
 	test.Equal(t, 2, calls)
 }
 
@@ -245,7 +245,7 @@ func TestRetryDoMaxDuration(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, context.DeadlineExceeded)
+	test.ErrorIs(t, err, context.DeadlineExceeded)
 	test.True(t, calls >= 1)
 	test.True(t, calls < 10)
 }
@@ -266,7 +266,7 @@ func TestRetryDoMaxDurationOnly(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, context.DeadlineExceeded)
+	test.ErrorIs(t, err, context.DeadlineExceeded)
 	test.True(t, calls >= 1)
 }
 
@@ -287,7 +287,7 @@ func TestRetryDoMaxDurationStopsAfterSlowAttempt(t *testing.T) {
 		return failErr
 	})
 
-	test.Error(t, err, context.DeadlineExceeded)
+	test.ErrorIs(t, err, context.DeadlineExceeded)
 	test.Equal(t, 1, calls)
 }
 
@@ -322,7 +322,7 @@ func TestRetryDoUnboundedUntilContextCanceled(t *testing.T) {
 		return errors.New("failed")
 	})
 
-	test.Error(t, err, context.Canceled)
+	test.ErrorIs(t, err, context.Canceled)
 	test.Equal(t, 3, calls)
 }
 
@@ -341,5 +341,5 @@ func TestRetryDoParentContextDeadlineWins(t *testing.T) {
 		return errors.New("failed")
 	})
 
-	test.Error(t, err, context.DeadlineExceeded)
+	test.ErrorIs(t, err, context.DeadlineExceeded)
 }
