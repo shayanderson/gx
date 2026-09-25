@@ -83,6 +83,21 @@ func TestEqual(t *testing.T) {
 
 	expectPass(t, func(f *fakeT) { Equal(f, 5, 5) })
 	expectFail(t, func(f *fakeT) { Equal(f, 5, 6) })
+
+	f := expectFail(t, func(f *fakeT) { Equal(f, []int(nil), []int{}) })
+	if !strings.Contains(f.msg, "[]int(nil)") || !strings.Contains(f.msg, "[]int{}") {
+		t.Fatalf("equality failure does not distinguish nil and empty slices: %s", f.msg)
+	}
+
+	f = expectFail(t, func(f *fakeT) { Equal(f, 1, 2) })
+	if strings.Contains(f.msg, "(int)") {
+		t.Fatalf("equality failure repeats the shared type: %s", f.msg)
+	}
+
+	f = expectFail(t, func(f *fakeT) { Equal[any](f, 1, "2") })
+	if !strings.Contains(f.msg, "(int)") || !strings.Contains(f.msg, "(string)") {
+		t.Fatalf("equality failure does not include differing types: %s", f.msg)
+	}
 }
 
 func TestErrorIs(t *testing.T) {
@@ -148,8 +163,15 @@ func TestGreaterOrEqual(t *testing.T) {
 func TestLen(t *testing.T) {
 	t.Parallel()
 
+	array := [3]int{}
+	var nilArray *[3]int
+	value := 1
+
 	expectPass(t, func(f *fakeT) { Len(f, 3, []int{1, 2, 3}) })
+	expectPass(t, func(f *fakeT) { Len(f, 3, &array) })
+	expectPass(t, func(f *fakeT) { Len(f, 3, nilArray) })
 	expectFail(t, func(f *fakeT) { Len(f, 2, []int{1}) })
+	expectFail(t, func(f *fakeT) { Len(f, 1, &value) })
 	expectFail(t, func(f *fakeT) { Len(f, 1, 123) })
 }
 

@@ -100,16 +100,30 @@ func Empty(t TestingT, s string, message ...string) {
 	}
 }
 
+// formatEqualFailure formats the failure message for an equality assertion.
+func formatEqualFailure(expected, actual any) string {
+	expectedText := fmt.Sprintf("%v", expected)
+	actualText := fmt.Sprintf("%v", actual)
+	if expectedText == actualText {
+		expectedText = fmt.Sprintf("%#v", expected)
+		actualText = fmt.Sprintf("%#v", actual)
+	}
+
+	if reflect.TypeOf(expected) == reflect.TypeOf(actual) {
+		return fmt.Sprintf("expected: '%s', got: '%s'", expectedText, actualText)
+	}
+	return fmt.Sprintf(
+		"expected: '%s' (%T), got: '%s' (%T)",
+		expectedText, expected, actualText, actual,
+	)
+}
+
 // Equal asserts that expected and actual are deeply equal according to reflect.DeepEqual.
 // Use time.Time.Equal for instant comparisons and math.IsNaN for NaN values.
 func Equal[T any](t TestingT, expected, actual T, message ...string) {
 	t.Helper()
 	if !reflect.DeepEqual(expected, actual) {
-		fail(
-			t,
-			fmt.Sprintf("expected: '%v' (%T), got: '%v' (%T)", expected, expected, actual, actual),
-			message...,
-		)
+		fail(t, formatEqualFailure(expected, actual), message...)
 	}
 }
 
@@ -183,24 +197,35 @@ func GreaterOrEqual[T cmp.Ordered](t TestingT, actual, minimum T, message ...str
 	}
 }
 
-// Len asserts that expected matches object's length.
+// Len asserts that expected matches object's length. Object must be an array,
+// pointer to array, slice, map, string, or channel.
 func Len(t TestingT, expected int, object any, message ...string) {
 	t.Helper()
 	v := reflect.ValueOf(object)
+	valid := false
 	switch v.Kind() {
 	case reflect.Array, reflect.Slice, reflect.Map, reflect.String, reflect.Chan:
-		actual := v.Len()
-		if actual != expected {
-			fail(
-				t,
-				fmt.Sprintf("expected length '%d' but got '%d'", expected, actual),
-				message...,
-			)
-		}
-	default:
+		valid = true
+	case reflect.Pointer:
+		valid = v.Type().Elem().Kind() == reflect.Array
+	}
+	if !valid {
 		fail(
 			t,
-			fmt.Sprintf("invalid type %T (must be array, slice, map, string, or channel)", object),
+			fmt.Sprintf(
+				"invalid type %T (must be array, pointer to array, slice, map, string, or channel)",
+				object,
+			),
+			message...,
+		)
+		return
+	}
+
+	actual := v.Len()
+	if actual != expected {
+		fail(
+			t,
+			fmt.Sprintf("expected length '%d' but got '%d'", expected, actual),
 			message...,
 		)
 	}
@@ -234,7 +259,7 @@ func Nil(t TestingT, v any, message ...string) {
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice:
 		if rv.IsNil() {
 			return
 		}
@@ -279,7 +304,7 @@ func NotNil(t TestingT, v any, message ...string) {
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice:
 		if rv.IsNil() {
 			fail(t, "value is nil", message...)
 		}
