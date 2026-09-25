@@ -379,35 +379,11 @@ func TestType(t *testing.T) {
 	expectFail(t, func(f *fakeT) { Type(f, 1, "s") })
 }
 
-func TestFormatMsg(t *testing.T) {
-	t.Parallel()
-
-	format := "expected %v but got %v"
-	msg := formatMsg(format, 5, 6)
-	expected := ": expected 5 but got 6"
-	if msg != expected {
-		t.Fatalf("expected '%v' but got '%v'", expected, msg)
-	}
-
-	msg = formatMsg("no details")
-	expected = ": no details"
-	if msg != expected {
-		t.Fatalf("expected '%v' but got '%v'", expected, msg)
-	}
-
-	msg = formatMsg(1, 2)
-	expected = ": 1 2"
-	if msg != expected {
-		t.Fatalf("expected '%v' but got '%v'", expected, msg)
-	}
-}
-
 func TestFailMessage(t *testing.T) {
 	t.Parallel()
 
-	format := "expected %d"
 	f := runAssertion(func(f *fakeT) {
-		fail(f, "values differ", format, 42)
+		fail(f, "values differ", "expected 42")
 	})
 
 	if !strings.Contains(f.msg, "assertion failed: values differ: expected 42") {
@@ -417,4 +393,15 @@ func TestFailMessage(t *testing.T) {
 	if !strings.Contains(f.msg, "stack trace:") {
 		t.Fatalf("expected stack trace in failure message: %s", f.msg)
 	}
+}
+
+func TestFailRejectsMultipleMessages(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if got := recover(); got != "assertion accepts at most one message" {
+			t.Fatalf("unexpected multiple-message panic: %v", got)
+		}
+	}()
+	fail(&fakeT{}, "values differ", "one", "two")
 }

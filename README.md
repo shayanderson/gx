@@ -338,6 +338,9 @@ Runtime assertions that panic with a stack trace.
 assert.Equal(200, statusCode)
 assert.NoError(err)
 assert.True(user.Active)
+
+// Optional message.
+assert.Equal(200, statusCode, "unexpected status code")
 ```
 
 ### env
@@ -361,6 +364,9 @@ func TestThing(t *testing.T) {
     test.Equal(t, "expected", got)
     test.NoError(t, err)
     test.True(t, ok)
+
+    // Optional message.
+    test.Equal(t, "expected", got, "unexpected value")
 }
 ```
 

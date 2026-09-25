@@ -256,50 +256,18 @@ func TestType(t *testing.T) {
 	}
 }
 
-func TestFormatMsg(t *testing.T) {
-	t.Parallel()
-
-	expect := ": custom message: details here: 23"
-	format := "custom message: %s: %d"
-	result := formatMsg(format, "details here", 23)
-	if result != expect {
-		t.Fatalf("expected '%s', got '%s'", expect, result)
-	}
-
-	expect = ": no details"
-	result = formatMsg("no details")
-	if result != expect {
-		t.Fatalf("expected '%s', got '%s'", expect, result)
-	}
-
-	expect = ": 100% bad"
-	percentMessage := "100% bad"
-	result = formatMsg(percentMessage)
-	if result != expect {
-		t.Fatalf("expected '%s', got '%s'", expect, result)
-	}
-
-	args := []any{errors.New("context"), "details"}
-	expect = ": " + fmt.Sprint(args...)
-	result = formatMsg(args...)
-	if result != expect {
-		t.Fatalf("expected '%s', got '%s'", expect, result)
-	}
-}
-
 func TestFailureMessages(t *testing.T) {
 	t.Parallel()
 
-	message := panicMessage(t, func() { True(false, errors.New("context"), "details") })
+	message := panicMessage(t, func() { True(false, "context details") })
 	if !strings.Contains(message, "assertion failed: expected true, got false") {
 		t.Fatalf("assertion message missing from panic: %q", message)
 	}
-	if !strings.Contains(message, ": "+fmt.Sprint(errors.New("context"), "details")) {
+	if !strings.Contains(message, ": context details") {
 		t.Fatalf("context missing from panic: %q", message)
 	}
 
-	format := "request %s failed"
-	message = panicMessage(t, func() { Equal(1, 2, format, "abc") })
+	message = panicMessage(t, func() { Equal(1, 2, fmt.Sprintf("request %s failed", "abc")) })
 	if !strings.Contains(message, ": request abc failed") {
 		t.Fatalf("formatted context missing from panic: %q", message)
 	}
@@ -309,4 +277,10 @@ func TestFailureMessages(t *testing.T) {
 	if !strings.Contains(message, ": 100% bad") {
 		t.Fatalf("literal context missing from panic: %q", message)
 	}
+
+	message = panicMessage(t, func() { True(false, "one", "two") })
+	if message != "assertion accepts at most one message" {
+		t.Fatalf("unexpected multiple-message panic: %q", message)
+	}
+
 }
