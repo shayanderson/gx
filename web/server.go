@@ -195,13 +195,13 @@ func NewServer(opts Options) *Server {
 	return s
 }
 
-// Delete registers a new DELETE route with a handler.
-func (s *Server) Delete(pattern string, handler HandlerFunc, middleware ...Middleware) {
+// DELETE registers a new DELETE route with a handler.
+func (s *Server) DELETE(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodDelete+" "+pattern, handler, middleware...)
 }
 
-// Get registers a new GET route with a handler.
-func (s *Server) Get(pattern string, handler HandlerFunc, middleware ...Middleware) {
+// GET registers a new GET route with a handler.
+func (s *Server) GET(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodGet+" "+pattern, handler, middleware...)
 }
 
@@ -226,18 +226,18 @@ func (s *Server) Mux() *http.ServeMux {
 	return s.mux
 }
 
-// Patch registers a new PATCH route with a handler.
-func (s *Server) Patch(pattern string, handler HandlerFunc, middleware ...Middleware) {
+// PATCH registers a new PATCH route with a handler.
+func (s *Server) PATCH(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodPatch+" "+pattern, handler, middleware...)
 }
 
-// Post registers a new POST route with a handler.
-func (s *Server) Post(pattern string, handler HandlerFunc, middleware ...Middleware) {
+// POST registers a new POST route with a handler.
+func (s *Server) POST(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodPost+" "+pattern, handler, middleware...)
 }
 
-// Put registers a new PUT route with a handler.
-func (s *Server) Put(pattern string, handler HandlerFunc, middleware ...Middleware) {
+// PUT registers a new PUT route with a handler.
+func (s *Server) PUT(pattern string, handler HandlerFunc, middleware ...Middleware) {
 	s.Handle(http.MethodPut+" "+pattern, handler, middleware...)
 }
 

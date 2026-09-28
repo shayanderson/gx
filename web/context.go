@@ -18,6 +18,9 @@ import (
 // DefaultMaxReadSize is the default maximum number of request-body bytes read by Bind.
 const DefaultMaxReadSize int64 = 5 * 1024 * 1024
 
+// Map is shorthand for map[string]any, useful for ad hoc JSON responses.
+type Map map[string]any
+
 // responseWriter is a wrapper around http.ResponseWriter that tracks if the header has
 // been written.
 type responseWriter struct {

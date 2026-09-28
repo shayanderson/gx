@@ -107,7 +107,7 @@ func TestServerHandler(t *testing.T) {
 			return next(c)
 		}
 	})
-	s.Get("/hello", func(c *Context) error {
+	s.GET("/hello", func(c *Context) error {
 		return c.String("hello")
 	})
 
@@ -128,7 +128,7 @@ func TestServerBuildsGlobalMiddlewareOnce(t *testing.T) {
 		builds++
 		return next
 	})
-	s.Get("/", func(c *Context) error {
+	s.GET("/", func(c *Context) error {
 		return c.String("ok")
 	})
 
@@ -147,7 +147,7 @@ func TestServerServeHTTPLogsRequest(t *testing.T) {
 		Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
 		LogPrefix: "public-api",
 	})
-	s.Get("/hello", func(c *Context) error {
+	s.GET("/hello", func(c *Context) error {
 		return c.String("hello")
 	})
 
@@ -167,7 +167,7 @@ func TestServerServeHTTPLogsTLSRequest(t *testing.T) {
 
 	var logs bytes.Buffer
 	s := NewServer(Options{Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
-	s.Get("/hello", func(c *Context) error {
+	s.GET("/hello", func(c *Context) error {
 		return c.String("hello")
 	})
 	req := httptest.NewRequest(http.MethodGet, "/hello", nil)
@@ -188,7 +188,7 @@ func TestServerServeHTTPLogsHandlerError(t *testing.T) {
 		Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
 		LogPrefix: "public-api",
 	})
-	s.Get("/fail", func(*Context) error {
+	s.GET("/fail", func(*Context) error {
 		return Error(http.StatusTeapot, "short and stout")
 	})
 
@@ -212,7 +212,7 @@ func TestServerServeHTTPLogsEffectiveErrorStatus(t *testing.T) {
 	s := NewServer(Options{
 		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
 	})
-	s.Get("/fail", func(*Context) error {
+	s.GET("/fail", func(*Context) error {
 		return Error(http.StatusOK, "bad status")
 	})
 
@@ -233,7 +233,7 @@ func TestServerServeHTTPErrorStatus(t *testing.T) {
 
 	var logs bytes.Buffer
 	s := NewServer(Options{Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
-	s.Get("/fail", func(*Context) error {
+	s.GET("/fail", func(*Context) error {
 		return ErrorStatus()
 	})
 
@@ -252,7 +252,7 @@ func TestServerServeHTTPDoesNotUseDefaultLogger(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(originalDefaultLogger) })
 
 	s := NewServer(Options{})
-	s.Get("/hello", func(c *Context) error {
+	s.GET("/hello", func(c *Context) error {
 		return c.String("hello")
 	})
 
@@ -279,18 +279,18 @@ func TestServerMethodHelpers(t *testing.T) {
 			method: http.MethodDelete,
 			path:   "/delete",
 			body:   "deleted",
-			add:    (*Server).Delete,
+			add:    (*Server).DELETE,
 		},
-		{name: "get", method: http.MethodGet, path: "/get", body: "got", add: (*Server).Get},
+		{name: "get", method: http.MethodGet, path: "/get", body: "got", add: (*Server).GET},
 		{
 			name:   "patch",
 			method: http.MethodPatch,
 			path:   "/patch",
 			body:   "patched",
-			add:    (*Server).Patch,
+			add:    (*Server).PATCH,
 		},
-		{name: "post", method: http.MethodPost, path: "/post", body: "posted", add: (*Server).Post},
-		{name: "put", method: http.MethodPut, path: "/put", body: "put", add: (*Server).Put},
+		{name: "post", method: http.MethodPost, path: "/post", body: "posted", add: (*Server).POST},
+		{name: "put", method: http.MethodPut, path: "/put", body: "put", add: (*Server).PUT},
 	}
 
 	for _, tc := range cases {
@@ -338,7 +338,7 @@ func TestServerGlobalMiddlewareResponsePreventsRouteErrorResponse(t *testing.T) 
 			return next(c)
 		}
 	})
-	s.Get("/", func(*Context) error {
+	s.GET("/", func(*Context) error {
 		return Error(http.StatusInternalServerError, "failed")
 	})
 	rr := httptest.NewRecorder()
@@ -563,7 +563,7 @@ func TestServerErrorHandler(t *testing.T) {
 		test.Equal(t, "bad", err.Error())
 		_ = c.String("custom", http.StatusBadRequest)
 	}})
-	s.Get("/", func(c *Context) error {
+	s.GET("/", func(c *Context) error {
 		return Error(http.StatusBadRequest, "bad")
 	})
 	rr := httptest.NewRecorder()
@@ -581,7 +581,7 @@ func TestServerErrorHandlerDoesNotRunAfterResponse(t *testing.T) {
 	s := NewServer(Options{ErrorHandler: func(*Context, StatusError) {
 		called = true
 	}})
-	s.Get("/", func(c *Context) error {
+	s.GET("/", func(c *Context) error {
 		if err := c.String("partial", http.StatusCreated); err != nil {
 			return err
 		}
@@ -621,7 +621,7 @@ func TestServerBindErrorResponses(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := NewServer(Options{MaxReadSize: tc.maxReadSize})
-			s.Post("/", func(c *Context) error {
+			s.POST("/", func(c *Context) error {
 				return c.Bind(&struct{}{})
 			})
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
@@ -639,7 +639,7 @@ func TestServerBindRequiresJSONContentType(t *testing.T) {
 	t.Parallel()
 
 	s := NewServer(Options{})
-	s.Post("/", func(c *Context) error {
+	s.POST("/", func(c *Context) error {
 		return c.Bind(&struct{}{})
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
@@ -656,7 +656,7 @@ func TestServerBindAnyContentType(t *testing.T) {
 	t.Parallel()
 
 	s := NewServer(Options{})
-	s.Post("/", func(c *Context) error {
+	s.POST("/", func(c *Context) error {
 		var body struct {
 			Name string `json:"name"`
 		}
@@ -697,7 +697,7 @@ func TestServerStart(t *testing.T) {
 	addr := ln.Addr().String()
 	test.NoError(t, ln.Close())
 	s := NewServer(Options{Addr: addr})
-	s.Get("/", func(c *Context) error {
+	s.GET("/", func(c *Context) error {
 		return c.String("started")
 	})
 	s.Use(func(next HandlerFunc) HandlerFunc {

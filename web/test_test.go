@@ -34,7 +34,7 @@ func TestNewTestServerWithOptions(t *testing.T) {
 			_ = c.String("custom", http.StatusBadRequest)
 		},
 	})
-	ts.Get("/", func(c *Context) error {
+	ts.GET("/", func(c *Context) error {
 		return Error(http.StatusBadRequest, "bad request")
 	})
 
@@ -118,24 +118,24 @@ func TestTestServerMethodHelpers(t *testing.T) {
 			method: http.MethodDelete,
 			path:   "/delete",
 			body:   "deleted",
-			add:    (*TestServer).Delete,
+			add:    (*TestServer).DELETE,
 		},
-		{name: "get", method: http.MethodGet, path: "/get", body: "got", add: (*TestServer).Get},
+		{name: "get", method: http.MethodGet, path: "/get", body: "got", add: (*TestServer).GET},
 		{
 			name:   "patch",
 			method: http.MethodPatch,
 			path:   "/patch",
 			body:   "patched",
-			add:    (*TestServer).Patch,
+			add:    (*TestServer).PATCH,
 		},
 		{
 			name:   "post",
 			method: http.MethodPost,
 			path:   "/post",
 			body:   "posted",
-			add:    (*TestServer).Post,
+			add:    (*TestServer).POST,
 		},
-		{name: "put", method: http.MethodPut, path: "/put", body: "put", add: (*TestServer).Put},
+		{name: "put", method: http.MethodPut, path: "/put", body: "put", add: (*TestServer).PUT},
 	}
 
 	for _, tc := range cases {
@@ -157,7 +157,7 @@ func TestTestServerRouteMiddleware(t *testing.T) {
 	t.Parallel()
 
 	ts := NewTestServer(t)
-	ts.Get("/", func(c *Context) error {
+	ts.GET("/", func(c *Context) error {
 		return c.String(c.Get("route").(string))
 	}, func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
@@ -182,7 +182,7 @@ func TestTestServerUse(t *testing.T) {
 			return next(c)
 		}
 	})
-	ts.Get("/", func(c *Context) error {
+	ts.GET("/", func(c *Context) error {
 		return c.String("used")
 	})
 

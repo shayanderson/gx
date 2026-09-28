@@ -379,13 +379,13 @@ s := web.NewServer(web.Options{
     Addr: ":8080",
 })
 
-s.Get("/", func(c *web.Context) error {
-    return c.JSON(map[string]any{
+s.GET("/", func(c *web.Context) error {
+    return c.JSON(web.Map{
         "status": "ok",
     })
 })
 
-s.Get("/users/{id}", func(c *web.Context) error {
+s.GET("/users/{id}", func(c *web.Context) error {
     user, err := store.Get(c.Context(), c.Request.PathValue("id"))
     if err != nil {
         return web.Error(http.StatusNotFound, "user not found")
@@ -394,7 +394,7 @@ s.Get("/users/{id}", func(c *web.Context) error {
     return c.JSON(user)
 })
 
-s.Post("/users", func(c *web.Context) error {
+s.POST("/users", func(c *web.Context) error {
     var input struct {
         Name string `json:"name"`
     }
