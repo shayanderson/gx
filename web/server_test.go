@@ -696,7 +696,11 @@ func TestServerStart(t *testing.T) {
 	test.NoError(t, err)
 	addr := ln.Addr().String()
 	test.NoError(t, ln.Close())
-	s := NewServer(Options{Addr: addr})
+	var logs bytes.Buffer
+	s := NewServer(Options{
+		Addr:   addr,
+		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
+	})
 	s.GET("/", func(c *Context) error {
 		return c.String("started")
 	})
@@ -730,6 +734,15 @@ func TestServerStart(t *testing.T) {
 
 	test.NoError(t, s.Stop())
 	test.NoError(t, <-errCh)
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"http: starting server","addr":"`+addr+`"`,
+	))
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"http: stopping server","addr":"`+addr+`"`,
+	))
+	test.True(t, strings.Contains(logs.String(),
+		`"msg":"http: stopped server","addr":"`+addr+`"`,
+	))
 }
 
 func TestServerStartTLSReturnsError(t *testing.T) {

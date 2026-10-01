@@ -122,6 +122,7 @@ func (q *Queue[T]) Run(ctx context.Context) error {
 		return ErrQueueWorkerRequired
 	}
 
+	parentCtx := ctx
 	ctx, cancel := context.WithCancelCause(ctx)
 	q.mu.Lock()
 	if q.running {
@@ -172,6 +173,10 @@ func (q *Queue[T]) Run(ctx context.Context) error {
 	}
 
 	wg.Wait()
+
+	if errors.Is(parentCtx.Err(), context.Canceled) {
+		return nil
+	}
 
 	err := context.Cause(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {

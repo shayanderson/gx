@@ -1,6 +1,6 @@
 # gx
 
-`gx` is a collection of small, focused packages and types that complement Go's standard library. It provides functionality that feels like a natural extension of the standard library while remaining idiomatic, lightweight, and dependency-free.
+`gx` is a collection of small, focused packages and types that complement the Go standard library. It provides functionality that feels like a natural extension of the standard library while remaining idiomatic, lightweight, and dependency-free.
 
 ## Installation
 
@@ -31,6 +31,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 - [`Queue[T]`](#queuet)
 - [`Retry`](#retry)
 - [`Runner`](#runner)
+- [`Runtime`](#runtime)
 - [`Semaphore`](#semaphore)
 - [`Set[T]`](#sett)
 - [`Stack[T]`](#stackt)
@@ -51,6 +52,8 @@ a, err := gx.NewAccumulator(ctx, gx.AccumulatorOptions{
 a.Add(25)
 a.Add(75) // flushes
 ```
+
+See the [Accumulator example](examples/accumulator/main.go) for a complete runnable demonstration.
 
 #### `Buffer[T]`
 
@@ -84,6 +87,8 @@ if value, ok := b.TryNext(); ok {
 }
 ```
 
+See the [Buffer example](examples/buffer/main.go) for a complete runnable demonstration.
+
 #### `Bus`
 
 Publishes typed values asynchronously to registered subscribers. Use `Bus` when subscribers should run asynchronously from the publisher. `Publish` panics if no subscribers are registered for the published type.
@@ -109,6 +114,8 @@ b.Publish(ctx, UserLoggedIn{UserID: "u123"})
 b.Publish(ctx, UserLoggedOut{UserID: "u123"})
 ```
 
+See the [Bus example](examples/bus/main.go) for a complete runnable demonstration.
+
 #### `Debouncer`
 
 Delays execution until no new calls occur within the configured interval.
@@ -119,6 +126,8 @@ d.Do(func() {
     save()
 })
 ```
+
+See the [Debouncer example](examples/debouncer/main.go) for a complete runnable demonstration.
 
 #### `Dispatcher`
 
@@ -147,55 +156,7 @@ err := d.Dispatch(ctx, UserLoggedIn{UserID: "u123"})
 err = d.Dispatch(ctx, UserLoggedOut{UserID: "u123"})
 ```
 
-<details>
-<summary>Buffered event dispatching with Queue[T]</summary>
-
-```go
-type Event interface {
-    dispatch(context.Context, *gx.Dispatcher) error
-}
-
-type UserLoggedIn struct {
-    UserID string
-}
-
-func (e UserLoggedIn) dispatch(ctx context.Context, d *gx.Dispatcher) error {
-    return d.Dispatch(ctx, e)
-}
-
-type UserLoggedOut struct {
-    UserID string
-}
-
-func (e UserLoggedOut) dispatch(ctx context.Context, d *gx.Dispatcher) error {
-    return d.Dispatch(ctx, e)
-}
-
-d := gx.NewDispatcher()
-d.Register(func(ctx context.Context, e UserLoggedIn) error {
-    fmt.Println("user logged in:", e.UserID)
-    return nil
-})
-d.Register(func(ctx context.Context, e UserLoggedOut) error {
-    fmt.Println("user logged out:", e.UserID)
-    return nil
-})
-
-q := gx.NewQueue(gx.QueueOptions[Event]{
-    Worker: func(ctx context.Context, e Event) error {
-        // Dispatch through the concrete event type so Dispatcher
-        // can resolve the correct handler.
-        return e.dispatch(ctx, d)
-    },
-})
-
-go q.Run(ctx)
-
-q.Push(UserLoggedIn{UserID: "u123"})
-q.Push(UserLoggedOut{UserID: "u123"})
-```
-
-</details>
+See the [Dispatcher example](examples/dispatcher/main.go) for direct synchronous dispatch, or the [Dispatcher-Queue example](examples/dispatcher-queue/main.go) for buffered dispatch.
 
 #### `Map[K, V]`
 
@@ -232,6 +193,8 @@ ok := q.Push(42)
 q.Close() // no more items; Run returns after processing 42
 ```
 
+See the [Queue example](examples/queue/main.go) for a complete runnable demonstration.
+
 `Run` blocks until the context is canceled, a worker returns an error, or all workers stop. After `Close`, workers process remaining buffered items and stop once the queue is empty, so `Run` returns `nil`.
 
 #### `Retry`
@@ -249,6 +212,8 @@ err = r.Do(ctx, func(ctx context.Context) error {
 })
 ```
 
+See the [Retry example](examples/retry/main.go) for a complete runnable demonstration.
+
 #### `Runner`
 
 Runs concurrent tasks with automatic context cancellation on error.
@@ -259,6 +224,40 @@ r.Run(func() error { return work(ctx) })
 r.Run(func() error { return work2(ctx) })
 err := r.Wait()
 ```
+
+See the [Runner example](examples/runner/main.go) for a complete runnable demonstration.
+
+#### `Runtime`
+
+Manages an application's service lifecycle: initialization, startup, task
+cancellation, and reverse-order shutdown. A Runtime is single-use.
+
+```go
+rt := gx.NewRuntime()
+rt.Create("api", newAPI)
+
+err := rt.Run(ctx, gx.RunOptions{
+    Logger: slog.Default(),
+    ShutdownTimeout: 10 * time.Second,
+})
+
+func newAPI(c *gx.Container) (*API, error) {
+	api := &API{}
+	c.Run("server", api.Run)
+	c.OnStop("close server", api.Close)
+	return api, nil
+}
+```
+
+See the [Runtime example](examples/runtime/main.go) for a complete runnable application.
+
+Main container methods:
+
+- `OnInit` builds and wires the container before any container starts.
+- `OnStart` synchronously brings the container online before queued work starts.
+- `Run` registers managed concurrent work. Queued work starts after all `OnStart` hooks succeed.
+- `OnStopping` runs during shutdown and before managed work exits. Use it to signal or stop work that must exit before finalization.
+- `OnStop` runs after managed work exits and safely finalizes resources.
 
 #### `Semaphore`
 
@@ -317,6 +316,8 @@ if value, ok := s.TryPop(); ok {
 }
 ```
 
+See the [Stack example](examples/stack/main.go) for a complete runnable demonstration.
+
 #### `Throttler`
 
 Limits how often an action may execute.
@@ -327,6 +328,8 @@ t.Do(func() {
     refresh()
 })
 ```
+
+See the [Throttler example](examples/throttler/main.go) for a complete runnable demonstration.
 
 Alternatively, use `Allow()` to control execution manually.
 
@@ -405,6 +408,8 @@ s.POST("/users", func(c *web.Context) error {
     return c.JSON(input, http.StatusCreated)
 })
 ```
+
+See the [web example](examples/web/main.go) for a complete runnable REST API.
 
 Handler error messages are returned to clients. For an error that should not be public, log the
 details in the application and return `web.ErrorStatus()`, which returns a 500 Internal Server

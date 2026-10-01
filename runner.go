@@ -19,15 +19,29 @@ func NewRunner(ctx context.Context) (*Runner, context.Context) {
 	return &Runner{cancel: cancel}, ctx
 }
 
+// Cancel records err as the runner's first error and cancels its context.
+//
+// Subsequent calls have no effect. err must be non-nil.
+func (r *Runner) Cancel(err error) {
+	if err == nil {
+		panic("gx: Runner.Cancel requires a non-nil error")
+	}
+
+	r.errOnce.Do(func() {
+		r.err = err
+		r.cancel(err)
+	})
+}
+
 // Run runs a function and handles errors.
 // It sets the first error to the app error.
-func (g *Runner) Run(fn func() error) {
-	g.wg.Go(func() {
+func (r *Runner) Run(fn func() error) {
+	r.wg.Go(func() {
 		if err := fn(); err != nil {
-			g.errOnce.Do(func() {
-				g.err = err
-				if g.cancel != nil {
-					g.cancel(err)
+			r.errOnce.Do(func() {
+				r.err = err
+				if r.cancel != nil {
+					r.cancel(err)
 				}
 			})
 		}
@@ -36,10 +50,10 @@ func (g *Runner) Run(fn func() error) {
 
 // Wait blocks until all app goroutines are done.
 // It returns the first error if it exists.
-func (g *Runner) Wait() error {
-	g.wg.Wait()
-	if g.cancel != nil {
-		g.cancel(g.err)
+func (r *Runner) Wait() error {
+	r.wg.Wait()
+	if r.cancel != nil {
+		r.cancel(r.err)
 	}
-	return g.err
+	return r.err
 }

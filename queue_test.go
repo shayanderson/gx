@@ -231,6 +231,27 @@ func TestQueueContextCancel(t *testing.T) {
 	test.NoError(t, <-errCh)
 }
 
+func TestQueueContextCancelCause(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancelCause(t.Context())
+	defer cancel(nil)
+
+	q := NewQueue(QueueOptions[int]{
+		Worker: func(context.Context, int) error {
+			return nil
+		},
+	})
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- q.Run(ctx)
+	}()
+
+	cancel(errors.New("parent failed"))
+	test.NoError(t, <-errs)
+}
+
 func TestQueueDeadlineExceeded(t *testing.T) {
 	t.Parallel()
 

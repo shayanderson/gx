@@ -282,9 +282,11 @@ func (c *Context) logErrorResponseWrite(err error) {
 		return
 	}
 
-	c.logger.ErrorContext(c.Context(), fmt.Sprintf(
-		"%s: failed to write error response", c.logPrefix,
-	), slog.String("err", err.Error()))
+	c.logger.ErrorContext(
+		c.Context(),
+		fmt.Sprintf("%s: failed to write error response", c.logPrefix),
+		slog.String("err", err.Error()),
+	)
 }
 
 // logRequest logs an HTTP request.

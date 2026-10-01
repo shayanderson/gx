@@ -243,6 +243,8 @@ func (s *Server) PUT(pattern string, handler HandlerFunc, middleware ...Middlewa
 
 // Start starts the HTTP server.
 func (s *Server) Start() error {
+	s.logInfo("starting server")
+
 	var err error
 	if s.opts.CertFile != "" && s.opts.CertKeyFile != "" {
 		err = s.server.ListenAndServeTLS(s.opts.CertFile, s.opts.CertKeyFile)
@@ -258,9 +260,14 @@ func (s *Server) Start() error {
 // Stop stops the HTTP server.
 func (s *Server) Stop() error {
 	s.stopping.Store(true)
+	s.logInfo("stopping server")
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.ShutdownTimeout)
 	defer cancel()
-	return s.server.Shutdown(ctx)
+	if err := s.server.Shutdown(ctx); err != nil {
+		return err
+	}
+	s.logInfo("stopped server")
+	return nil
 }
 
 // Use adds middleware to the server. It must be called before the server begins serving requests.
@@ -268,6 +275,14 @@ func (s *Server) Stop() error {
 // route errors.
 func (s *Server) Use(middleware ...Middleware) {
 	s.middleware = append(s.middleware, middleware...)
+}
+
+// logInfo logs an informational message using the server's logger, if configured.
+func (s *Server) logInfo(message string) {
+	if s.contextOpts.logger == nil {
+		return
+	}
+	s.contextOpts.logger.Info(s.opts.LogPrefix+": "+message, slog.String("addr", s.opts.Addr))
 }
 
 // serveHTTP logs and dispatches an HTTP request.

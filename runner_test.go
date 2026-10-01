@@ -61,3 +61,34 @@ func TestRunnerError(t *testing.T) {
 
 	test.ErrorIs(t, context.Cause(ctx), errFirst)
 }
+
+func TestRunnerCancel(t *testing.T) {
+	t.Parallel()
+
+	runner, ctx := NewRunner(t.Context())
+
+	errFirst := errors.New("first error")
+	errSecond := errors.New("second error")
+
+	runner.Cancel(errFirst)
+	runner.Cancel(errSecond)
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("context was not canceled")
+	}
+
+	test.ErrorIs(t, runner.Wait(), errFirst)
+	test.ErrorIs(t, context.Cause(ctx), errFirst)
+}
+
+func TestRunnerCancelNilPanics(t *testing.T) {
+	t.Parallel()
+
+	runner, _ := NewRunner(t.Context())
+
+	test.Panics(t, func() {
+		runner.Cancel(nil)
+	})
+}
