@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -37,7 +38,7 @@ type RunOptions struct {
 
 	// Signals replaces the default runtime shutdown signals.
 	//
-	// A nil or empty slice defaults to os.Interrupt.
+	// A nil or empty slice defaults to os.Interrupt and syscall.SIGTERM.
 	Signals []os.Signal
 
 	// ShutdownTimeout bounds the context passed to Container.OnStopping and
@@ -346,7 +347,7 @@ func (r *Runtime) signalContext(
 
 	signals := opts.Signals
 	if len(signals) == 0 {
-		signals = []os.Signal{os.Interrupt}
+		signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 	}
 
 	return signal.NotifyContext(ctx, signals...)

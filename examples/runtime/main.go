@@ -57,8 +57,8 @@ func main() {
 		// Signals is then ignored.
 		NoSignals: false,
 
-		// Signals replaces the default (os.Interrupt) shutdown signal set. This
-		// lets Ctrl-C and a process-manager SIGTERM both start graceful shutdown.
+		// Signals replaces the default os.Interrupt and syscall.SIGTERM shutdown
+		// signal set.
 		Signals: []os.Signal{os.Interrupt, syscall.SIGTERM},
 
 		// ShutdownTimeout bounds each OnStopping and OnStop hook. It does not
