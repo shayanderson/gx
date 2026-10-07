@@ -20,20 +20,12 @@ type EmailJob struct {
 }
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	jobs := []EmailJob{
-		{ID: 1, Recipient: "ada@example.com"},
-		{ID: 2, Recipient: "lin@example.com"},
-		{ID: 3, Recipient: "margo@example.com"},
-		{ID: 4, Recipient: "toni@example.com"},
-	}
-	processed := make(chan string, len(jobs))
+	processed := make(chan string, 4)
 
 	queue := gx.NewQueue(gx.QueueOptions[EmailJob]{
-		// Size bounds the number of jobs waiting for a worker.
-		Size: 1,
+		// Size bounds the number of jobs waiting for a worker. Push returns
+		// false instead of blocking if the queue is full or closed.
+		Size: 4,
 
 		// Workers controls the number of jobs processed concurrently.
 		Workers: 2,
@@ -51,42 +43,28 @@ func main() {
 		},
 	})
 
-	// Push tries immediately and returns false if the queue is full or closed.
-	// This first job fills the buffer before workers start.
-	if !queue.Push(jobs[0]) {
-		log.Fatal("could not queue first email")
-	}
-
 	// Run blocks until the queue is closed and drained, its context is canceled,
 	// or a worker returns an error. Start it in a goroutine when producers should
 	// continue adding work.
 	runErr := make(chan error, 1)
-	go func() {
-		err := queue.Run(ctx)
-		// Run returning does not close the queue. Cancel producers so a worker
-		// error cannot leave them blocked in PushWait.
-		cancel()
-		runErr <- err
-	}()
+	go func() { runErr <- queue.Run(context.Background()) }()
 
-	var pushErr error
-	for _, job := range jobs[1:] {
-		// PushWait waits for capacity, ctx cancellation, or queue closure.
-		// A nil error means enqueued, not processed.
-		if err := queue.PushWait(ctx, job); err != nil {
-			pushErr = fmt.Errorf("queue email %d: %w", job.ID, err)
-			break
+	for _, job := range []EmailJob{
+		{ID: 1, Recipient: "ada@example.com"},
+		{ID: 2, Recipient: "lin@example.com"},
+		{ID: 3, Recipient: "margo@example.com"},
+		{ID: 4, Recipient: "toni@example.com"},
+	} {
+		if !queue.Push(job) {
+			log.Fatalf("could not queue email %d", job.ID)
 		}
 	}
 
-	// Close prevents new pushes. On the successful path, leave ctx active so
-	// workers finish every queued job; Run returns nil once the queue is drained.
+	// Close prevents future Push calls, but workers finish every job already in
+	// the queue. Once drained, Run returns nil.
 	queue.Close()
 	if err := <-runErr; err != nil {
 		log.Fatal(err)
-	}
-	if pushErr != nil {
-		log.Fatal(pushErr)
 	}
 
 	close(processed)

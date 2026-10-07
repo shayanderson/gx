@@ -141,49 +141,6 @@ func TestQueueFailOnFullDoesNotFailAfterClose(t *testing.T) {
 	test.NoError(t, q.Run(t.Context()))
 }
 
-func TestQueueFailNil(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		var processed int
-		q := NewQueue(QueueOptions[int]{
-			Worker: func(context.Context, int) error {
-				processed++
-				return nil
-			},
-		})
-		errs := make(chan error, 1)
-		go func() { errs <- q.Run(t.Context()) }()
-		synctest.Wait()
-
-		q.fail(nil)
-		synctest.Wait()
-		test.Equal(t, 0, len(errs)) // A nil error must not cancel Run.
-		test.True(t, q.Push(1))
-		q.Close()
-		test.NoError(t, <-errs)
-		test.Equal(t, 1, processed)
-	})
-}
-
-func TestQueueFailPreservesFirstError(t *testing.T) {
-	t.Parallel()
-
-	q := NewQueue(QueueOptions[int]{
-		Worker: func(context.Context, int) error { return nil },
-	})
-	first := errors.New("first failure")
-	second := errors.New("second failure")
-
-	q.fail(first)
-	q.fail(second)
-	q.fail(nil)
-
-	// Close and Run also verify that the repeated-failure path releases mu.
-	q.Close()
-	test.True(t, errors.Is(q.Run(t.Context()), first))
-}
-
 func TestQueueWorkerError(t *testing.T) {
 	t.Parallel()
 
@@ -364,8 +321,6 @@ func TestQueuePushClosed(t *testing.T) {
 	q.Close()
 
 	test.False(t, q.Push(1))
-	test.True(t, errors.Is(q.PushWait(t.Context(), 1), ErrQueueClosed))
-	test.Equal(t, int64(0), q.pushWaiters.Load())
 	test.True(t, q.Closed())
 }
 
@@ -451,242 +406,116 @@ func TestQueueWorkers(t *testing.T) {
 	test.Equal(t, int32(workers), maxRunning.Load())
 }
 
-func TestQueuePushWaitBeforeRun(t *testing.T) {
+func TestWaitQueueDefaults(t *testing.T) {
 	t.Parallel()
 
-	var processed []int
-	q := NewQueue(QueueOptions[int]{
-		Size: 2,
-		Worker: func(_ context.Context, item int) error {
-			processed = append(processed, item)
-			return nil
-		},
-	})
+	q := NewWaitQueue(WaitQueueOptions[int]{})
 
-	test.NoError(t, q.PushWait(t.Context(), 1))
-	test.True(t, q.Push(2))
-	test.Equal(t, 0, len(processed)) // Enqueued, not processed.
+	test.Equal(t, 1, q.queue.workers)
+	test.Equal(t, 4, cap(q.queue.queue))
+	test.Equal(t, 4, cap(q.slots))
+	test.Equal(t, 4, len(q.slots))
+	test.True(t, q.queue.worker == nil)
+	test.True(t, errors.Is(q.Run(t.Context()), ErrQueueWorkerRequired))
+}
+
+func TestWaitQueuePush(t *testing.T) {
+	t.Parallel()
+
+	q := NewWaitQueue(WaitQueueOptions[int]{Size: 1})
+
+	test.True(t, q.Push(1))
+	test.False(t, q.Push(2))
 	q.Close()
-	test.NoError(t, q.Run(t.Context()))
-	test.Equal(t, 2, len(processed))
-	for i, item := range processed {
-		test.Equal(t, i+1, item)
-	}
+	test.False(t, q.Push(3))
+	test.True(t, q.Closed())
 }
 
-func TestQueuePushWaitCapacity(t *testing.T) {
-	t.Parallel()
-
-	for _, failOnFull := range []bool{false, true} {
-		name := "default"
-		if failOnFull {
-			name = "fail_on_full"
-		}
-		t.Run(name, func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) {
-				const producers = 4
-				process := make(chan struct{})
-				var processed []int
-				q := NewQueue(QueueOptions[int]{
-					Size:       1,
-					FailOnFull: failOnFull,
-					Worker: func(_ context.Context, item int) error {
-						<-process
-						processed = append(processed, item)
-						return nil
-					},
-				})
-				test.True(t, q.Push(0))
-				pushErrs := make(chan error, producers)
-				for i := range producers {
-					go func() { pushErrs <- q.PushWait(t.Context(), i+1) }()
-				}
-				synctest.Wait()
-				test.Equal(t, 0, len(pushErrs)) // All producers are blocked.
-
-				runErr := make(chan error, 1)
-				go func() { runErr <- q.Run(t.Context()) }()
-				for i := range producers {
-					synctest.Wait()
-					// One enqueue succeeds per dequeue, even with the worker blocked.
-					test.Equal(t, 1, len(pushErrs))
-					test.NoError(t, <-pushErrs)
-					if i < producers-1 {
-						process <- struct{}{}
-					}
-				}
-
-				q.Close()
-				close(process)
-				test.NoError(t, <-runErr)
-				test.Equal(t, producers+1, len(processed))
-				seen := make(map[int]bool)
-				for _, item := range processed {
-					test.False(t, seen[item])
-					seen[item] = true
-				}
-				for i := range producers + 1 {
-					test.True(t, seen[i])
-				}
-			})
-		})
-	}
-}
-
-func TestQueuePushWaitCanceled(t *testing.T) {
+func TestWaitQueuePushWait(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		q := NewQueue(QueueOptions[int]{Size: 1})
-		ctx, cancel := context.WithCancel(t.Context())
-		cancel()
-		test.True(t, errors.Is(q.PushWait(ctx, 1), context.Canceled))
-		test.Equal(t, int64(0), q.pushWaiters.Load())
-		test.True(t, q.Push(2)) // The canceled call did not consume capacity.
-
-		ctx, cancel = context.WithCancel(t.Context())
-		defer cancel()
-		errs := make(chan error, 1)
-		go func() { errs <- q.PushWait(ctx, 3) }()
-		synctest.Wait()
-		test.Equal(t, 0, len(errs))
-		cancel()
-		test.True(t, errors.Is(<-errs, context.Canceled))
-		test.Equal(t, int64(0), q.pushWaiters.Load())
-		q.Close()
-		test.Equal(t, 2, <-q.queue)
-		_, ok := <-q.queue
-		test.False(t, ok)
-	})
-}
-
-func TestQueuePushWaitDeadlineExceeded(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		q := NewQueue(QueueOptions[int]{Size: 1})
-		test.True(t, q.Push(1))
-		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-		defer cancel()
-		test.True(t, errors.Is(q.PushWait(ctx, 2), context.DeadlineExceeded))
-		test.Equal(t, int64(0), q.pushWaiters.Load())
-		q.Close()
-		test.Equal(t, 1, <-q.queue)
-		_, ok := <-q.queue
-		test.False(t, ok)
-	})
-}
-
-func TestQueuePushWaitClose(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		const producers = 8
+		process := make(chan struct{})
 		var processed []int
-		q := NewQueue(QueueOptions[int]{
+		q := NewWaitQueue(WaitQueueOptions[int]{
 			Size: 1,
 			Worker: func(_ context.Context, item int) error {
+				<-process
 				processed = append(processed, item)
 				return nil
 			},
 		})
 		test.True(t, q.Push(1))
-		errs := make(chan error, producers)
-		for range producers {
-			go func() { errs <- q.PushWait(t.Context(), 2) }()
-		}
+		errs := make(chan error, 1)
+		go func() { errs <- q.PushWait(t.Context(), 2) }()
 		synctest.Wait()
 		test.Equal(t, 0, len(errs))
+
+		runErr := make(chan error, 1)
+		go func() { runErr <- q.Run(t.Context()) }()
+		synctest.Wait()
+		test.NoError(t, <-errs) // The item was enqueued before the worker completed.
+
 		q.Close()
-		q.Close()
-		for range producers {
-			test.True(t, errors.Is(<-errs, ErrQueueClosed))
-		}
-		test.Equal(t, int64(0), q.pushWaiters.Load())
-		test.NoError(t, q.Run(t.Context()))
-		test.Equal(t, 1, len(processed))
-		if len(processed) == 1 {
-			test.Equal(t, 1, processed[0])
-		}
+		close(process)
+		test.NoError(t, <-runErr)
+		test.Equal(t, 2, len(processed))
 	})
 }
 
-func TestQueuePushWaitConcurrent(t *testing.T) {
+func TestWaitQueuePushWaitCanceled(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		const producers, items = 8, 100
-		var processed atomic.Int32
-		q := NewQueue(QueueOptions[int]{
-			Size:    1,
-			Workers: 4,
-			Worker: func(context.Context, int) error {
-				processed.Add(1)
-				return nil
-			},
-		})
-		runErr := make(chan error, 1)
-		go func() { runErr <- q.Run(t.Context()) }()
-		var wg sync.WaitGroup
-		for range producers {
-			wg.Go(func() {
-				for i := range items {
-					test.NoError(t, q.PushWait(t.Context(), i))
-				}
-			})
-		}
-		// No cancellation or closure can rescue a missed capacity notification.
-		wg.Wait()
-		test.Equal(t, int64(0), q.pushWaiters.Load())
+		q := NewWaitQueue(WaitQueueOptions[int]{Size: 1})
+		test.True(t, q.Push(1))
+
+		ctx, cancel := context.WithCancel(t.Context())
+		errs := make(chan error, 1)
+		go func() { errs <- q.PushWait(ctx, 2) }()
+		synctest.Wait()
+		cancel()
+		test.True(t, errors.Is(<-errs, context.Canceled))
+		test.Equal(t, 0, len(q.slots))
+
 		q.Close()
-		test.NoError(t, <-runErr)
-		test.Equal(t, int32(producers*items), processed.Load())
+		test.Equal(t, 1, <-q.queue.queue)
 	})
 }
 
-func TestQueuePushWaitConcurrentClose(t *testing.T) {
+func TestWaitQueuePushWaitClose(t *testing.T) {
 	t.Parallel()
 
-	var accepted, processed atomic.Int32
-	started := make(chan struct{})
-	var once sync.Once
-	q := NewQueue(QueueOptions[int]{
-		Size:    2,
-		Workers: 4,
-		Worker: func(context.Context, int) error {
-			processed.Add(1)
-			once.Do(func() { close(started) })
-			return nil
-		},
+	synctest.Test(t, func(t *testing.T) {
+		const waiters = 8
+		q := NewWaitQueue(WaitQueueOptions[int]{Size: 1})
+		test.True(t, q.Push(1))
+		errs := make(chan error, waiters)
+		for range waiters {
+			go func() { errs <- q.PushWait(t.Context(), 2) }()
+		}
+		synctest.Wait()
+
+		q.Close()
+		q.Close()
+		for range waiters {
+			test.True(t, errors.Is(<-errs, ErrWaitQueueClosed))
+		}
+		test.True(t, errors.Is(q.PushWait(t.Context(), 3), ErrWaitQueueClosed))
 	})
-	runErr := make(chan error, 1)
-	go func() { runErr <- q.Run(t.Context()) }()
-	var producers sync.WaitGroup
-	for range 16 {
-		producers.Go(func() {
-			for i := range 100 {
-				if i%2 == 0 {
-					if q.Push(i) {
-						accepted.Add(1)
-					}
-					continue
-				}
-				err := q.PushWait(t.Context(), i)
-				if errors.Is(err, ErrQueueClosed) {
-					return
-				}
-				test.NoError(t, err)
-				if err != nil {
-					return
-				}
-				accepted.Add(1)
-			}
-		})
-	}
-	<-started
+}
+
+func TestWaitQueueWorkerError(t *testing.T) {
+	t.Parallel()
+
+	expected := errors.New("worker failed")
+	q := NewWaitQueue(WaitQueueOptions[int]{
+		Worker: func(context.Context, int) error { return expected },
+	})
+
+	errs := make(chan error, 1)
+	go func() { errs <- q.Run(t.Context()) }()
+	test.True(t, q.Push(1))
+	test.True(t, errors.Is(<-errs, expected))
 	q.Close()
-	producers.Wait()
-	test.NoError(t, <-runErr)
-	test.Equal(t, accepted.Load(), processed.Load())
-	test.True(t, errors.Is(q.PushWait(t.Context(), 0), ErrQueueClosed))
 }
