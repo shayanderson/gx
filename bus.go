@@ -14,19 +14,15 @@ type Subscriber[T any] func(context.Context, T)
 type Bus struct {
 	m   map[reflect.Type][]any
 	mu  sync.RWMutex
-	sem chan struct{}
+	sem *Semaphore
 }
 
 // NewBus creates a new Bus with the specified maximum number of concurrent
 // publishes. If maxConcurrency is zero or negative, it defaults to 1.
 func NewBus(maxConcurrency int) *Bus {
-	if maxConcurrency <= 0 {
-		maxConcurrency = 1
-	}
-
 	return &Bus{
 		m:   make(map[reflect.Type][]any),
-		sem: make(chan struct{}, maxConcurrency),
+		sem: NewSemaphore(maxConcurrency),
 	}
 }
 
@@ -41,16 +37,12 @@ func (b *Bus) Publish[T any](ctx context.Context, value T) {
 		panic(fmt.Sprintf("bus: no subscribers registered for type %T", value))
 	}
 
-	select {
-	case b.sem <- struct{}{}:
-	case <-ctx.Done():
+	if err := b.sem.Acquire(ctx); err != nil {
 		return
 	}
 
 	go func() {
-		defer func() {
-			<-b.sem
-		}()
+		defer b.sem.Release()
 
 		for _, s := range subscribers {
 			s.(Subscriber[T])(ctx, value)
