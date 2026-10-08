@@ -78,4 +78,33 @@ func main() {
 	for _, line := range lines {
 		fmt.Println(line)
 	}
+
+	pushWaitExample()
+}
+
+// pushWaitExample shows how a producer can wait for capacity instead of
+// handling a failed non-blocking Push call.
+func pushWaitExample() {
+	queue := gx.NewQueue(gx.QueueOptions[EmailJob]{
+		Size: 1,
+		Worker: func(_ context.Context, job EmailJob) error {
+			fmt.Printf("queued with PushWait: email %d to %s\n", job.ID, job.Recipient)
+			return nil
+		},
+	})
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- queue.Run(context.Background()) }()
+
+	if err := queue.PushWait(context.Background(), EmailJob{
+		ID:        5,
+		Recipient: "sam@example.com",
+	}); err != nil {
+		log.Fatal(err)
+	}
+
+	queue.Close()
+	if err := <-runErr; err != nil {
+		log.Fatal(err)
+	}
 }

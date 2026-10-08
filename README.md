@@ -36,7 +36,6 @@ See the Go package documentation for complete APIs and examples. See tests for a
 - [`Set[T]`](#sett)
 - [`Stack[T]`](#stackt)
 - [`Throttler`](#throttler)
-- [`WaitQueue[T]`](#waitqueuet)
 
 #### `Accumulator`
 
@@ -190,13 +189,15 @@ go func() {
     }
 }()
 
-ok := q.Push(42)
-q.Close() // no more items; Run returns after processing 42
+ok := q.Push(42)            // returns false when full
+err := q.PushWait(ctx, 55)  // waits for capacity
+
+q.Close() // no more items, Run returns after processing queued items
 ```
 
-See the [Queue example](examples/queue/main.go) for a complete runnable demonstration.
-
 `Run` blocks until the context is canceled, a worker returns an error, or all workers stop. After `Close`, workers process remaining buffered items and stop once the queue is empty, so `Run` returns `nil`.
+
+See the [Queue example](examples/queue/main.go) for a complete runnable demonstration.
 
 #### `Retry`
 
@@ -334,36 +335,6 @@ t.Do(func() {
 See the [Throttler example](examples/throttler/main.go) for a complete runnable demonstration.
 
 Alternatively, use `Allow()` to control execution manually.
-
-#### `WaitQueue[T]`
-
-Processes items using a pool of workers with cancellable producer backpressure.
-
-```go
-q := gx.NewWaitQueue(gx.WaitQueueOptions[int]{
-    Size: 128,
-    Worker: func(ctx context.Context, item int) error {
-        fmt.Println("processing:", item)
-        return nil
-    },
-    Workers: 2,
-})
-
-go func() {
-    if err := q.Run(ctx); err != nil {
-        fmt.Println("queue error:", err)
-    }
-}()
-
-if err := q.PushWait(ctx, 42); err != nil {
-    fmt.Println("could not queue item:", err)
-}
-q.Close() // no more items, Run returns after processing 42
-```
-
-`Push` returns `false` when capacity is unavailable. `PushWait` waits for capacity, context cancellation, or `Close`; a nil error means the item was enqueued, not processed. `WaitQueueOptions` intentionally has no `FailOnFull` option.
-
-See the [WaitQueue example](examples/wait-queue/main.go) for a complete runnable demonstration.
 
 ### assert
 

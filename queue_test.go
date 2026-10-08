@@ -84,6 +84,78 @@ func TestQueueFull(t *testing.T) {
 	test.False(t, q.Closed())
 }
 
+func TestQueuePushWait(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		process := make(chan struct{})
+		var processed []int
+		q := NewQueue(QueueOptions[int]{
+			Size: 1,
+			Worker: func(_ context.Context, item int) error {
+				<-process
+				processed = append(processed, item)
+				return nil
+			},
+		})
+		test.True(t, q.Push(1))
+		errs := make(chan error, 1)
+		go func() { errs <- q.PushWait(t.Context(), 2) }()
+		synctest.Wait()
+		test.Equal(t, 0, len(errs))
+
+		runErr := make(chan error, 1)
+		go func() { runErr <- q.Run(t.Context()) }()
+		synctest.Wait()
+		test.NoError(t, <-errs)
+
+		q.Close()
+		close(process)
+		test.NoError(t, <-runErr)
+		test.Equal(t, []int{1, 2}, processed)
+	})
+}
+
+func TestQueuePushWaitCanceled(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		q := NewQueue(QueueOptions[int]{Size: 1})
+		test.True(t, q.Push(1))
+
+		ctx, cancel := context.WithCancel(t.Context())
+		errs := make(chan error, 1)
+		go func() { errs <- q.PushWait(ctx, 2) }()
+		synctest.Wait()
+		cancel()
+		test.True(t, errors.Is(<-errs, context.Canceled))
+		test.Equal(t, 1, len(q.queue))
+		q.Close()
+	})
+}
+
+func TestQueuePushWaitClose(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		const waiters = 8
+		q := NewQueue(QueueOptions[int]{Size: 1})
+		test.True(t, q.Push(1))
+		errs := make(chan error, waiters)
+		for range waiters {
+			go func() { errs <- q.PushWait(context.Background(), 2) }()
+		}
+		synctest.Wait()
+
+		q.Close()
+		q.Close()
+		for range waiters {
+			test.True(t, errors.Is(<-errs, ErrQueueClosed))
+		}
+		test.True(t, errors.Is(q.PushWait(t.Context(), 3), ErrQueueClosed))
+	})
+}
+
 func TestQueueFailOnFull(t *testing.T) {
 	t.Parallel()
 
@@ -139,6 +211,41 @@ func TestQueueFailOnFullDoesNotFailAfterClose(t *testing.T) {
 
 	test.False(t, q.Push(1))
 	test.NoError(t, q.Run(t.Context()))
+}
+
+func TestQueueFail(t *testing.T) {
+	t.Parallel()
+
+	first := errors.New("first failure")
+	second := errors.New("second failure")
+	q := NewQueue(QueueOptions[int]{
+		Worker: func(context.Context, int) error { return nil },
+	})
+
+	q.fail(nil)
+	test.Nil(t, q.failure)
+
+	q.fail(first)
+	q.fail(second)
+	test.True(t, errors.Is(q.failure, first))
+	test.True(t, errors.Is(q.Run(t.Context()), first))
+}
+
+func TestQueueFailCancelsRun(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		expected := errors.New("queue failed")
+		q := NewQueue(QueueOptions[int]{
+			Worker: func(context.Context, int) error { return nil },
+		})
+		errs := make(chan error, 1)
+		go func() { errs <- q.Run(t.Context()) }()
+		synctest.Wait()
+
+		q.fail(expected)
+		test.True(t, errors.Is(<-errs, expected))
+	})
 }
 
 func TestQueueWorkerError(t *testing.T) {
@@ -404,118 +511,4 @@ func TestQueueWorkers(t *testing.T) {
 	test.NoError(t, <-errCh)
 
 	test.Equal(t, int32(workers), maxRunning.Load())
-}
-
-func TestWaitQueueDefaults(t *testing.T) {
-	t.Parallel()
-
-	q := NewWaitQueue(WaitQueueOptions[int]{})
-
-	test.Equal(t, 1, q.queue.workers)
-	test.Equal(t, 4, cap(q.queue.queue))
-	test.Equal(t, 4, cap(q.slots))
-	test.Equal(t, 4, len(q.slots))
-	test.True(t, q.queue.worker == nil)
-	test.True(t, errors.Is(q.Run(t.Context()), ErrQueueWorkerRequired))
-}
-
-func TestWaitQueuePush(t *testing.T) {
-	t.Parallel()
-
-	q := NewWaitQueue(WaitQueueOptions[int]{Size: 1})
-
-	test.True(t, q.Push(1))
-	test.False(t, q.Push(2))
-	q.Close()
-	test.False(t, q.Push(3))
-	test.True(t, q.Closed())
-}
-
-func TestWaitQueuePushWait(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		process := make(chan struct{})
-		var processed []int
-		q := NewWaitQueue(WaitQueueOptions[int]{
-			Size: 1,
-			Worker: func(_ context.Context, item int) error {
-				<-process
-				processed = append(processed, item)
-				return nil
-			},
-		})
-		test.True(t, q.Push(1))
-		errs := make(chan error, 1)
-		go func() { errs <- q.PushWait(t.Context(), 2) }()
-		synctest.Wait()
-		test.Equal(t, 0, len(errs))
-
-		runErr := make(chan error, 1)
-		go func() { runErr <- q.Run(t.Context()) }()
-		synctest.Wait()
-		test.NoError(t, <-errs) // The item was enqueued before the worker completed.
-
-		q.Close()
-		close(process)
-		test.NoError(t, <-runErr)
-		test.Equal(t, 2, len(processed))
-	})
-}
-
-func TestWaitQueuePushWaitCanceled(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		q := NewWaitQueue(WaitQueueOptions[int]{Size: 1})
-		test.True(t, q.Push(1))
-
-		ctx, cancel := context.WithCancel(t.Context())
-		errs := make(chan error, 1)
-		go func() { errs <- q.PushWait(ctx, 2) }()
-		synctest.Wait()
-		cancel()
-		test.True(t, errors.Is(<-errs, context.Canceled))
-		test.Equal(t, 0, len(q.slots))
-
-		q.Close()
-		test.Equal(t, 1, <-q.queue.queue)
-	})
-}
-
-func TestWaitQueuePushWaitClose(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		const waiters = 8
-		q := NewWaitQueue(WaitQueueOptions[int]{Size: 1})
-		test.True(t, q.Push(1))
-		errs := make(chan error, waiters)
-		for range waiters {
-			go func() { errs <- q.PushWait(t.Context(), 2) }()
-		}
-		synctest.Wait()
-
-		q.Close()
-		q.Close()
-		for range waiters {
-			test.True(t, errors.Is(<-errs, ErrWaitQueueClosed))
-		}
-		test.True(t, errors.Is(q.PushWait(t.Context(), 3), ErrWaitQueueClosed))
-	})
-}
-
-func TestWaitQueueWorkerError(t *testing.T) {
-	t.Parallel()
-
-	expected := errors.New("worker failed")
-	q := NewWaitQueue(WaitQueueOptions[int]{
-		Worker: func(context.Context, int) error { return expected },
-	})
-
-	errs := make(chan error, 1)
-	go func() { errs <- q.Run(t.Context()) }()
-	test.True(t, q.Push(1))
-	test.True(t, errors.Is(<-errs, expected))
-	q.Close()
 }

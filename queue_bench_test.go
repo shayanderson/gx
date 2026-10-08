@@ -39,31 +39,12 @@ func BenchmarkQueuePushClosed(b *testing.B) {
 	}
 }
 
-func BenchmarkWaitQueuePushFull(b *testing.B) {
-	q := gx.NewWaitQueue(gx.WaitQueueOptions[int]{Size: 1})
-	defer q.Close()
-	if !q.Push(1) {
-		b.Fatal("initial push failed")
-	}
-
-	b.ReportAllocs()
-	for b.Loop() {
-		if q.Push(1) {
-			b.Fatal("push to full wait queue succeeded")
-		}
-	}
+func BenchmarkQueuePushAccepted(b *testing.B) {
+	benchmarkQueuePushAccepted(b, 1, false)
 }
 
-func BenchmarkWaitQueuePushClosed(b *testing.B) {
-	q := gx.NewWaitQueue(gx.WaitQueueOptions[int]{Size: 1})
-	q.Close()
-
-	b.ReportAllocs()
-	for b.Loop() {
-		if q.Push(1) {
-			b.Fatal("push to closed wait queue succeeded")
-		}
-	}
+func BenchmarkQueuePushAcceptedParallel(b *testing.B) {
+	benchmarkQueuePushAccepted(b, 4, true)
 }
 
 func BenchmarkQueueThroughput(b *testing.B) {
@@ -74,32 +55,77 @@ func BenchmarkQueueThroughputParallel(b *testing.B) {
 	benchmarkQueueThroughput(b, true)
 }
 
-func BenchmarkWaitQueuePushThroughput(b *testing.B) {
-	benchmarkWaitQueuePushMethods(b, 1, 0)
+func BenchmarkQueuePushWait(b *testing.B) {
+	benchmarkQueuePushMethods(b, 1, 1)
 }
 
-func BenchmarkWaitQueuePushThroughputParallel(b *testing.B) {
-	benchmarkWaitQueuePushMethods(b, 8, 0)
+func BenchmarkQueuePushWaitParallel(b *testing.B) {
+	benchmarkQueuePushMethods(b, 8, 8)
 }
 
-func BenchmarkWaitQueuePushWait(b *testing.B) {
-	benchmarkWaitQueuePushMethods(b, 1, 1)
-}
-
-func BenchmarkWaitQueuePushWaitParallel(b *testing.B) {
-	benchmarkWaitQueuePushMethods(b, 8, 8)
-}
-
-func BenchmarkWaitQueueMixedProducers(b *testing.B) {
+func BenchmarkQueueMixedProducers(b *testing.B) {
 	// Keep the total producer count fixed for an apples-to-apples comparison.
-	// The zero-waiter case is the WaitQueue Push-only baseline for this harness.
 	for _, waitProducers := range []int{0, 1, 4} {
 		b.Run(
 			fmt.Sprintf("push_%d/pushwait_%d", 8-waitProducers, waitProducers),
 			func(b *testing.B) {
-				benchmarkWaitQueuePushMethods(b, 8, waitProducers)
+				benchmarkQueuePushMethods(b, 8, waitProducers)
 			},
 		)
+	}
+}
+
+// Each operation successfully enqueues one item without retrying. slots tracks
+// available queue capacity, which the worker returns as soon as it dequeues an
+// item. Timing includes that capacity handoff and the worker receive path.
+func benchmarkQueuePushAccepted(b *testing.B, workers int, parallel bool) {
+	const size = 128
+
+	slots := make(chan struct{}, size)
+	for range size {
+		slots <- struct{}{}
+	}
+	q := gx.NewQueue(gx.QueueOptions[int]{
+		Size:    size,
+		Workers: workers,
+		Worker: func(context.Context, int) error {
+			slots <- struct{}{}
+			return nil
+		},
+	})
+	done := make(chan error, 1)
+	go func() { done <- q.Run(context.Background()) }()
+
+	var failed atomic.Bool
+	b.ReportAllocs()
+	b.ResetTimer()
+	if parallel {
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				<-slots
+				if !q.Push(1) {
+					failed.Store(true)
+					return
+				}
+			}
+		})
+	} else {
+		for b.Loop() {
+			<-slots
+			if !q.Push(1) {
+				failed.Store(true)
+				break
+			}
+		}
+	}
+	b.StopTimer()
+
+	q.Close()
+	if failed.Load() {
+		b.Fatal("push with available capacity failed")
+	}
+	if err := <-done; err != nil {
+		b.Fatal(err)
 	}
 }
 
@@ -161,12 +187,12 @@ func benchmarkQueueThroughput(b *testing.B, parallel bool) {
 // time per accepted Push item, including retries and scheduling, but not final
 // draining. It is averaged across Push producers, not aggregate throughput or
 // individual non-blocking-call latency. Clocks are read only once per batch.
-func benchmarkWaitQueuePushMethods(b *testing.B, producers, waitProducers int) {
+func benchmarkQueuePushMethods(b *testing.B, producers, waitProducers int) {
 	for _, workers := range []int{1, 4} {
 		for _, size := range []int{1, 128, 4096} {
 			b.Run(fmt.Sprintf("workers_%d/size_%d", workers, size), func(b *testing.B) {
 				ctx := context.Background()
-				q := gx.NewWaitQueue(gx.WaitQueueOptions[int]{
+				q := gx.NewQueue(gx.QueueOptions[int]{
 					Size:    size,
 					Workers: workers,
 					Worker:  func(context.Context, int) error { return nil },
