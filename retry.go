@@ -3,6 +3,7 @@ package gx
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"time"
 )
 
@@ -23,6 +24,11 @@ type RetryOptions struct {
 	// Delay is the delay between failed attempts.
 	Delay time.Duration
 
+	// Jitter randomly reduces each retry delay by up to this fraction.
+	// Zero disables jitter. A value of one randomizes each retry delay
+	// between zero and its full duration.
+	Jitter float64
+
 	// MaxDelay limits the maximum delay between attempts.
 	// A value of zero disables the limit.
 	MaxDelay time.Duration
@@ -38,6 +44,7 @@ type Retry struct {
 	attempts    int
 	backoff     float64
 	delay       time.Duration
+	jitter      float64
 	maxDelay    time.Duration
 	maxDuration time.Duration
 }
@@ -52,6 +59,9 @@ func NewRetry(opts RetryOptions) (*Retry, error) {
 	}
 	if opts.Backoff < 0 {
 		return nil, errors.New("backoff must not be negative")
+	}
+	if opts.Jitter < 0 || opts.Jitter > 1 {
+		return nil, errors.New("jitter must be between 0 and 1")
 	}
 	if opts.MaxDelay < 0 {
 		return nil, errors.New("max delay must not be negative")
@@ -72,6 +82,7 @@ func NewRetry(opts RetryOptions) (*Retry, error) {
 		attempts:    opts.Attempts,
 		delay:       opts.Delay,
 		backoff:     backoff,
+		jitter:      opts.Jitter,
 		maxDelay:    opts.MaxDelay,
 		maxDuration: opts.MaxDuration,
 	}, nil
@@ -107,7 +118,7 @@ func (r *Retry) Do(ctx context.Context, fn RetryFunc) error {
 		}
 
 		if delay > 0 {
-			timer := time.NewTimer(delay)
+			timer := time.NewTimer(r.jitterDelay(delay))
 
 			select {
 			case <-ctx.Done():
@@ -128,4 +139,15 @@ func (r *Retry) Do(ctx context.Context, fn RetryFunc) error {
 	}
 
 	return err
+}
+
+// jitterDelay returns a randomized delay no greater than delay.
+func (r *Retry) jitterDelay(delay time.Duration) time.Duration {
+	if delay == 0 || r.jitter == 0 {
+		return delay
+	}
+
+	minDelay := time.Duration(float64(delay) * (1 - r.jitter))
+	// #nosec G404 -- retry jitter does not require cryptographic randomness.
+	return minDelay + time.Duration(rand.Float64()*float64(delay-minDelay))
 }

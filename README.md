@@ -206,6 +206,7 @@ Retries a function using configurable limits, delay, and backoff. With no attemp
 r, err := gx.NewRetry(gx.RetryOptions{
     Delay:    time.Second,
     Backoff:  2, // optional exponential backoff
+    Jitter:   0.5, // optional: retry after 50–100% of each delay
     MaxDuration: 30 * time.Second,
 })
 err = r.Do(ctx, func(ctx context.Context) error {

@@ -16,6 +16,7 @@ func TestNewRetry(t *testing.T) {
 		Attempts:    3,
 		Backoff:     2,
 		Delay:       time.Millisecond,
+		Jitter:      0.5,
 		MaxDelay:    time.Second,
 		MaxDuration: time.Minute,
 	})
@@ -24,6 +25,7 @@ func TestNewRetry(t *testing.T) {
 	test.Equal(t, 3, r.attempts)
 	test.Equal(t, 2.0, r.backoff)
 	test.Equal(t, time.Millisecond, r.delay)
+	test.Equal(t, 0.5, r.jitter)
 	test.Equal(t, time.Second, r.maxDelay)
 	test.Equal(t, time.Minute, r.maxDuration)
 }
@@ -38,6 +40,8 @@ func TestNewRetryInvalidOptions(t *testing.T) {
 		{name: "attempts", opts: RetryOptions{Attempts: -1, Backoff: 1}},
 		{name: "delay", opts: RetryOptions{Attempts: 1, Backoff: 1, Delay: -time.Millisecond}},
 		{name: "backoff", opts: RetryOptions{Attempts: 1, Backoff: -1}},
+		{name: "jitter_negative", opts: RetryOptions{Attempts: 1, Jitter: -0.1}},
+		{name: "jitter_above_one", opts: RetryOptions{Attempts: 1, Jitter: 1.1}},
 		{
 			name: "max_delay",
 			opts: RetryOptions{Attempts: 1, Backoff: 1, MaxDelay: -time.Millisecond},
@@ -82,6 +86,22 @@ func TestNewRetryDefaultBackoff(t *testing.T) {
 
 	test.NoError(t, err)
 	test.Equal(t, 1.0, r.backoff)
+}
+
+func TestRetryJitterDelay(t *testing.T) {
+	t.Parallel()
+
+	const delay = 100 * time.Millisecond
+
+	r := &Retry{jitter: 0.5}
+	for range 100 {
+		wait := r.jitterDelay(delay)
+		test.GreaterOrEqual(t, wait, 50*time.Millisecond)
+		test.LessOrEqual(t, wait, delay)
+	}
+
+	test.Equal(t, delay, (&Retry{}).jitterDelay(delay))
+	test.Equal(t, time.Duration(0), r.jitterDelay(0))
 }
 
 func TestRetryDoEventuallySucceeds(t *testing.T) {

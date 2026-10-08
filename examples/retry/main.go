@@ -27,6 +27,7 @@ func main() {
 		// later failures, while MaxDelay caps the wait at 100ms.
 		Delay:    50 * time.Millisecond,
 		Backoff:  2,
+		Jitter:   0.5,
 		MaxDelay: 100 * time.Millisecond,
 
 		// MaxDuration applies a deadline to the retry context and bounds the
