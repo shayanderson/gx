@@ -164,7 +164,9 @@ Generic concurrency-safe map.
 
 ```go
 m := gx.NewMap[string, int]()
-m.Set("count", 1)
+if m.Set("count", 1) {
+	// count was added as a new key
+}
 count, ok := m.Get("count")
 ```
 
@@ -283,7 +285,9 @@ Generic concurrency-safe set.
 
 ```go
 s := gx.NewSet("a", "b")
-s.Add("c")
+if s.Add("c") {
+	// c was added to the set
+}
 ok := s.Has("b")
 ```
 

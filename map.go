@@ -122,12 +122,15 @@ func (m *Map[K, V]) Remove(key K) bool {
 	return true
 }
 
-// Set associates value with key.
-func (m *Map[K, V]) Set(key K, value V) {
+// Set associates value with key, replacing any existing value.
+// It returns true if key was not already present.
+func (m *Map[K, V]) Set(key K, value V) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	_, ok := m.m[key]
 	m.m[key] = value
+	return !ok
 }
 
 // Values returns the values in the map.

@@ -22,9 +22,9 @@ func TestMapSetAndGet(t *testing.T) {
 
 	m := gx.NewMap[string, int]()
 
-	m.Set("a", 1)
-	m.Set("b", 2)
-	m.Set("a", 3)
+	test.True(t, m.Set("a", 1))
+	test.True(t, m.Set("b", 2))
+	test.False(t, m.Set("a", 3))
 
 	v, ok := m.Get("a")
 	test.True(t, ok)
