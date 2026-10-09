@@ -25,7 +25,8 @@ type Worker[T any] func(context.Context, T) error
 
 // QueueOptions represents the options for creating a queue.
 type QueueOptions[T any] struct {
-	// FailOnFull causes Run to return ErrQueueFull if the queue becomes full.
+	// FailOnFull causes Run to return ErrQueueFull when Push finds a full queue.
+	// It does not affect PushWait.
 	FailOnFull bool
 
 	// Size is the buffer size of the queue channel.
@@ -129,6 +130,7 @@ func (q *Queue[T]) Push(item T) bool {
 // PushWait waits for capacity, context cancellation, or queue closure.
 // Returning nil means the item was enqueued, not processed.
 // It returns ctx.Err() on cancellation or ErrQueueClosed on closure.
+// It does not trigger FailOnFull.
 // Cancellation or closure racing with an enqueue may still result in success.
 func (q *Queue[T]) PushWait(ctx context.Context, item T) error {
 	if err := ctx.Err(); err != nil {
