@@ -119,8 +119,7 @@ func drainExample() {
 
 	started := make(chan struct{}, 2)
 	queue := gx.NewQueue(gx.QueueOptions[EmailJob]{
-		Size:                2,
-		IgnoreContextCancel: true,
+		Size: 2,
 		Worker: func(ctx context.Context, job EmailJob) error {
 			started <- struct{}{}
 			// Simulate cancellation-aware I/O using the worker context.
@@ -137,7 +136,7 @@ func drainExample() {
 	})
 
 	runErr := make(chan error, 1)
-	go func() { runErr <- queue.Run(appCtx) }()
+	go func() { runErr <- queue.RunUntilClosed(appCtx) }()
 
 	for _, job := range []EmailJob{
 		{ID: 6, Recipient: "ash@example.com"},
@@ -149,7 +148,7 @@ func drainExample() {
 	}
 	<-started // Ensure Run is active before beginning shutdown.
 
-	// Producers have finished. Cancel the application, keeping workers alive.
+	// RunUntilClosed keeps workers alive after application cancellation.
 	stopApp()
 
 	// Use a fresh context: appCtx is already canceled.

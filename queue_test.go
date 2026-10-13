@@ -51,7 +51,7 @@ func TestQueue(t *testing.T) {
 	test.Equal(t, int32(2), processed.Load())
 }
 
-func TestQueueIgnoreContextCancel(t *testing.T) {
+func TestQueueRunUntilClosed(t *testing.T) {
 	t.Parallel()
 
 	for _, deadline := range []bool{false, true} {
@@ -65,7 +65,6 @@ func TestQueueIgnoreContextCancel(t *testing.T) {
 				defer cancel()
 				processed := make(chan int, 2)
 				q := NewQueue(QueueOptions[int]{
-					IgnoreContextCancel: true,
 					Worker: func(ctx context.Context, item int) error {
 						test.NoError(t, ctx.Err())
 						_, hasDeadline := ctx.Deadline()
@@ -75,7 +74,7 @@ func TestQueueIgnoreContextCancel(t *testing.T) {
 					},
 				})
 				runErr := make(chan error, 1)
-				go func() { runErr <- q.Run(ctx) }()
+				go func() { runErr <- q.RunUntilClosed(ctx) }()
 				test.True(t, q.Push(1))
 				test.Equal(t, 1, <-processed)
 
@@ -104,8 +103,7 @@ func TestQueueDrain(t *testing.T) {
 		process := make(chan struct{})
 		var processed []int
 		q := NewQueue(QueueOptions[int]{
-			Size:                1,
-			IgnoreContextCancel: true,
+			Size: 1,
 			Worker: func(_ context.Context, item int) error {
 				<-process
 				processed = append(processed, item)
@@ -113,7 +111,7 @@ func TestQueueDrain(t *testing.T) {
 			},
 		})
 		runErr := make(chan error, 1)
-		go func() { runErr <- q.Run(t.Context()) }()
+		go func() { runErr <- q.RunUntilClosed(t.Context()) }()
 		test.True(t, q.Push(1))
 		synctest.Wait() // First item is in flight.
 		test.True(t, q.Push(2))
@@ -159,7 +157,6 @@ func TestQueueDrainContextEnds(t *testing.T) {
 				release := make(chan struct{})
 				workerErr := make(chan error, 1)
 				q := NewQueue(QueueOptions[int]{
-					IgnoreContextCancel: true,
 					Worker: func(ctx context.Context, _ int) error {
 						<-ctx.Done()
 						workerErr <- ctx.Err()
@@ -168,7 +165,7 @@ func TestQueueDrainContextEnds(t *testing.T) {
 					},
 				})
 				runErr := make(chan error, 1)
-				go func() { runErr <- q.Run(t.Context()) }()
+				go func() { runErr <- q.RunUntilClosed(t.Context()) }()
 				test.True(t, q.Push(1))
 				synctest.Wait()
 
@@ -217,7 +214,6 @@ func TestQueueDrainWorkerError(t *testing.T) {
 		expected := errors.New("worker failed")
 		release := make(chan struct{})
 		q := NewQueue(QueueOptions[int]{
-			IgnoreContextCancel: true,
 			Worker: func(context.Context, int) error {
 				<-release
 				return expected
@@ -226,7 +222,7 @@ func TestQueueDrainWorkerError(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		runErr := make(chan error, 1)
-		go func() { runErr <- q.Run(ctx) }()
+		go func() { runErr <- q.RunUntilClosed(ctx) }()
 		test.True(t, q.Push(1))
 		synctest.Wait()
 		cancel()
@@ -638,30 +634,23 @@ func TestQueuePushClosed(t *testing.T) {
 func TestQueueAlreadyRunning(t *testing.T) {
 	t.Parallel()
 
-	q := NewQueue(QueueOptions[int]{
-		Workers: 1,
-		Size:    1,
-		Worker: func(ctx context.Context, i int) error {
-			return nil
-		},
+	synctest.Test(t, func(t *testing.T) {
+		q := NewQueue(QueueOptions[int]{
+			Workers: 1,
+			Size:    1,
+			Worker: func(context.Context, int) error {
+				return nil
+			},
+		})
+		errCh := make(chan error, 1)
+		go func() { errCh <- q.Run(t.Context()) }()
+		synctest.Wait()
+
+		test.True(t, errors.Is(q.Run(t.Context()), ErrQueueAlreadyRunning))
+
+		q.Close()
+		test.NoError(t, <-errCh)
 	})
-
-	errCh := make(chan error, 1)
-
-	go func() {
-		errCh <- q.Run(t.Context())
-	}()
-
-	time.Sleep(time.Millisecond)
-
-	err := q.Run(t.Context())
-
-	test.NotNil(t, err)
-	test.True(t, errors.Is(err, ErrQueueAlreadyRunning))
-
-	q.Close()
-
-	test.NoError(t, <-errCh)
 }
 
 func TestQueueWorkers(t *testing.T) {

@@ -29,10 +29,6 @@ type QueueOptions[T any] struct {
 	// It does not affect PushWait.
 	FailOnFull bool
 
-	// IgnoreContextCancel keeps workers running after Run's context is
-	// canceled or its deadline expires. Call Close or Drain to shut down.
-	IgnoreContextCancel bool
-
 	// Size is the buffer size of the queue channel.
 	Size int
 
@@ -45,20 +41,19 @@ type QueueOptions[T any] struct {
 
 // Queue processes items using a pool of workers.
 type Queue[T any] struct {
-	cancel              context.CancelCauseFunc
-	closeOnce           sync.Once
-	closed              bool
-	done                chan struct{}
-	failOnFull          bool
-	failure             error
-	ignoreContextCancel bool
-	mu                  sync.RWMutex
-	pushWaitDone        chan struct{}
-	pushWaitMu          sync.RWMutex
-	queue               chan T
-	running             bool
-	worker              Worker[T]
-	workers             int
+	cancel       context.CancelCauseFunc
+	closeOnce    sync.Once
+	closed       bool
+	done         chan struct{}
+	failOnFull   bool
+	failure      error
+	mu           sync.RWMutex
+	pushWaitDone chan struct{}
+	pushWaitMu   sync.RWMutex
+	queue        chan T
+	running      bool
+	worker       Worker[T]
+	workers      int
 }
 
 // NewQueue creates a new Queue with the specified number of workers,
@@ -74,12 +69,11 @@ func NewQueue[T any](opts QueueOptions[T]) *Queue[T] {
 	}
 
 	return &Queue[T]{
-		failOnFull:          opts.FailOnFull,
-		ignoreContextCancel: opts.IgnoreContextCancel,
-		pushWaitDone:        make(chan struct{}),
-		workers:             opts.Workers,
-		queue:               make(chan T, opts.Size),
-		worker:              opts.Worker,
+		failOnFull:   opts.FailOnFull,
+		pushWaitDone: make(chan struct{}),
+		workers:      opts.Workers,
+		queue:        make(chan T, opts.Size),
+		worker:       opts.Worker,
 	}
 }
 
@@ -188,19 +182,48 @@ func (q *Queue[T]) PushWait(ctx context.Context, item T) error {
 	}
 }
 
-// Run processes items until the closed queue is drained, a worker fails,
-// or its context ends. With IgnoreContextCancel, only Close, Drain,
-// or a queue/worker failure can stop processing.
+// Run processes items until the closed queue is drained, a worker fails, or
+// ctx ends.
 func (q *Queue[T]) Run(ctx context.Context) error {
+	return q.run(ctx)
+}
+
+// RunUntilClosed is like Run, but ignores ctx cancellation and deadline.
+// Context values are preserved. Workers stop through Close, Drain, or a
+// worker failure.
+func (q *Queue[T]) RunUntilClosed(ctx context.Context) error {
+	return q.run(context.WithoutCancel(ctx))
+}
+
+// fail sets the queue's failure state, if unset, and cancels the context if the queue is running.
+func (q *Queue[T]) fail(err error) {
+	if err == nil {
+		return
+	}
+
+	q.mu.Lock()
+	if q.failure != nil {
+		q.mu.Unlock()
+		return
+	}
+
+	q.failure = err
+	cancel := q.cancel
+	q.mu.Unlock()
+
+	if cancel != nil {
+		cancel(err)
+	}
+}
+
+// run processes items until ctx ends, a worker returns an error, or the queue
+// is closed and drained.
+func (q *Queue[T]) run(ctx context.Context) error {
 	if q.worker == nil {
 		return ErrQueueWorkerRequired
 	}
 
 	parentCtx := ctx
-	if q.ignoreContextCancel {
-		parentCtx = context.WithoutCancel(ctx)
-	}
-
 	ctx, cancel := context.WithCancelCause(parentCtx)
 	q.mu.Lock()
 	if q.running {
@@ -264,25 +287,4 @@ func (q *Queue[T]) Run(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// fail sets the queue's failure state, if unset, and cancels the context if the queue is running.
-func (q *Queue[T]) fail(err error) {
-	if err == nil {
-		return
-	}
-
-	q.mu.Lock()
-	if q.failure != nil {
-		q.mu.Unlock()
-		return
-	}
-
-	q.failure = err
-	cancel := q.cancel
-	q.mu.Unlock()
-
-	if cancel != nil {
-		cancel(err)
-	}
 }

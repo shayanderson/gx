@@ -199,7 +199,7 @@ q.Close() // stops accepting new items without waiting for Run to finish
 
 `Run` blocks until its context ends, a worker returns an error, or the closed queue finishes processing. `Close` stops accepting new items without waiting for `Run` to return. `Drain` closes the queue and waits for `Run` to return, canceling workers if its context ends first.
 
-To finish queued work during application shutdown, set `IgnoreContextCancel: true` so workers continue after the application context is canceled or expires. Stop producers, then call `Drain` with a fresh timeout context:
+To drain after application cancellation, use `RunUntilClosed` instead of `Run`, then call `Drain` with a fresh timeout context:
 
 ```go
 drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
