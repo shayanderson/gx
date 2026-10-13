@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"time"
 
 	"github.com/shayanderson/gx"
 )
@@ -80,6 +81,7 @@ func main() {
 	}
 
 	pushWaitExample()
+	drainExample()
 }
 
 // pushWaitExample shows how a producer can wait for capacity instead of
@@ -106,5 +108,60 @@ func pushWaitExample() {
 	queue.Close()
 	if err := <-runErr; err != nil {
 		log.Fatal(err)
+	}
+}
+
+// drainExample keeps workers alive during application shutdown, then gives
+// queued and in-flight work a separate deadline to finish.
+func drainExample() {
+	appCtx, stopApp := context.WithCancel(context.Background())
+	defer stopApp()
+
+	started := make(chan struct{}, 2)
+	queue := gx.NewQueue(gx.QueueOptions[EmailJob]{
+		Size:                2,
+		IgnoreContextCancel: true,
+		Worker: func(ctx context.Context, job EmailJob) error {
+			started <- struct{}{}
+			// Simulate cancellation-aware I/O using the worker context.
+			timer := time.NewTimer(10 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+				fmt.Printf("finished during drain: email %d to %s\n", job.ID, job.Recipient)
+				return nil
+			}
+		},
+	})
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- queue.Run(appCtx) }()
+
+	for _, job := range []EmailJob{
+		{ID: 6, Recipient: "ash@example.com"},
+		{ID: 7, Recipient: "jo@example.com"},
+	} {
+		if !queue.Push(job) {
+			log.Fatalf("could not queue email %d", job.ID)
+		}
+	}
+	<-started // Ensure Run is active before beginning shutdown.
+
+	// Producers have finished. Cancel the application, keeping workers alive.
+	stopApp()
+
+	// Use a fresh context: appCtx is already canceled.
+	drainCtx, cancelDrain := context.WithTimeout(context.Background(), time.Second)
+	defer cancelDrain()
+
+	if err := queue.Drain(drainCtx); err != nil {
+		log.Printf("queue drain interrupted: %v", err)
+	}
+	// Drain reports its own timeout/cancellation; Run reports worker errors.
+	// On timeout, this wait still requires workers to honor cancellation.
+	if err := <-runErr; err != nil {
+		log.Printf("queue worker failed: %v", err)
 	}
 }

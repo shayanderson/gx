@@ -197,9 +197,19 @@ err := q.PushWait(ctx, 55)  // waits for capacity
 q.Close() // no more items, Run returns after processing queued items
 ```
 
-`Run` blocks until the context is canceled, a worker returns an error, or all workers stop. After `Close`, workers process remaining buffered items and stop once the queue is empty, so `Run` returns `nil`.
+`Run` blocks until its context ends, a worker returns an error, or the closed queue finishes processing. `Close` rejects new items without waiting, workers finish buffered and in-flight work as long as their context remains active and no failure occurs.
 
-See the [Queue example](examples/queue/main.go) for a complete runnable demonstration.
+To finish queued work during application shutdown, set `IgnoreContextCancel: true` so workers continue after the application context is canceled or expires. Stop producers, then call `Drain` with a fresh timeout context:
+
+```go
+drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+if err := q.Drain(drainCtx); err != nil {
+    fmt.Println("queue drain interrupted:", err)
+}
+```
+
+See the [Queue example](examples/queue/main.go), including a `Drain` example, for a complete runnable shutdown demonstration.
 
 #### `Retry`
 
