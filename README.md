@@ -194,10 +194,10 @@ go func() {
 ok := q.Push(42)            // returns false when full
 err := q.PushWait(ctx, 55)  // waits for capacity
 
-q.Close() // no more items, Run returns after processing queued items
+q.Close() // stops accepting new items without waiting for Run to finish
 ```
 
-`Run` blocks until its context ends, a worker returns an error, or the closed queue finishes processing. `Close` rejects new items without waiting, workers finish buffered and in-flight work as long as their context remains active and no failure occurs.
+`Run` blocks until its context ends, a worker returns an error, or the closed queue finishes processing. `Close` stops accepting new items without waiting for `Run` to return. `Drain` closes the queue and waits for `Run` to return, canceling workers if its context ends first.
 
 To finish queued work during application shutdown, set `IgnoreContextCancel: true` so workers continue after the application context is canceled or expires. Stop producers, then call `Drain` with a fresh timeout context:
 
