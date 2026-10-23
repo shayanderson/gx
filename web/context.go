@@ -264,6 +264,7 @@ func (c *Context) logError(status int, err StatusError) {
 	if status >= http.StatusBadRequest && status < http.StatusInternalServerError {
 		level = slog.LevelWarn
 	}
+	// #nosec G706 -- request fields are validated by net/http and contain no control characters.
 	c.logger.LogAttrs(c.Context(), level, fmt.Sprintf(
 		"%s: %s %s %s from %s (%d)",
 		c.logPrefix,
@@ -282,6 +283,7 @@ func (c *Context) logErrorResponseWrite(err error) {
 		return
 	}
 
+	// #nosec G706 -- message contains only the configured prefix and err is a structured attribute.
 	c.logger.ErrorContext(
 		c.Context(),
 		fmt.Sprintf("%s: failed to write error response", c.logPrefix),
@@ -295,6 +297,7 @@ func (c *Context) logRequest() {
 		return
 	}
 
+	// #nosec G706 -- request fields are validated by net/http and contain no control characters.
 	c.logger.InfoContext(c.Context(), fmt.Sprintf(
 		"%s: %s %s %s from %s",
 		c.logPrefix,

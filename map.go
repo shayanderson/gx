@@ -36,6 +36,17 @@ func (m *Map[K, V]) Clone() *Map[K, V] {
 	}
 }
 
+// Delete removes key from the map.
+// It returns true if the key was present.
+func (m *Map[K, V]) Delete(key K) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	_, ok := m.m[key]
+	delete(m.m, key)
+	return ok
+}
+
 // Get returns the value associated with key.
 // The returned bool is true if the key was present.
 func (m *Map[K, V]) Get(key K) (V, bool) {
@@ -46,9 +57,9 @@ func (m *Map[K, V]) Get(key K) (V, bool) {
 	return v, ok
 }
 
-// GetAndRemove removes key from the map and returns its value.
+// GetAndDelete removes key from the map and returns its value.
 // The returned bool is true if the key was present.
-func (m *Map[K, V]) GetAndRemove(key K) (V, bool) {
+func (m *Map[K, V]) GetAndDelete(key K) (V, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -106,20 +117,6 @@ func (m *Map[K, V]) Len() int {
 	defer m.mu.RUnlock()
 
 	return len(m.m)
-}
-
-// Remove removes key from the map.
-// Returns true if the key was present.
-func (m *Map[K, V]) Remove(key K) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, ok := m.m[key]; !ok {
-		return false
-	}
-
-	delete(m.m, key)
-	return true
 }
 
 // Set associates value with key, replacing any existing value.

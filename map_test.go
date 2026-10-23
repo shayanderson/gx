@@ -55,32 +55,32 @@ func TestMapGetOrSet(t *testing.T) {
 	test.Equal(t, 1, m.Len())
 }
 
-func TestMapRemove(t *testing.T) {
+func TestMapDelete(t *testing.T) {
 	t.Parallel()
 
 	m := gx.NewMap[string, int]()
 	m.Set("a", 1)
 	m.Set("b", 2)
 
-	test.True(t, m.Remove("a"))
-	test.False(t, m.Remove("a"))
+	test.True(t, m.Delete("a"))
+	test.False(t, m.Delete("a"))
 	test.False(t, m.Has("a"))
 	test.True(t, m.Has("b"))
 	test.Equal(t, 1, m.Len())
 }
 
-func TestMapGetAndRemove(t *testing.T) {
+func TestMapGetAndDelete(t *testing.T) {
 	t.Parallel()
 
 	m := gx.NewMap[string, int]()
 	m.Set("a", 1)
 
-	v, ok := m.GetAndRemove("a")
+	v, ok := m.GetAndDelete("a")
 	test.True(t, ok)
 	test.Equal(t, 1, v)
 	test.False(t, m.Has("a"))
 
-	v, ok = m.GetAndRemove("a")
+	v, ok = m.GetAndDelete("a")
 	test.False(t, ok)
 	test.Equal(t, 0, v)
 }
@@ -110,7 +110,7 @@ func TestMapClone(t *testing.T) {
 	test.Equal(t, 2, clone.Len())
 
 	clone.Set("a", 3)
-	clone.Remove("b")
+	clone.Delete("b")
 	clone.Set("c", 4)
 
 	v, ok := m.Get("a")

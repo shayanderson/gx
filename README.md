@@ -27,6 +27,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 - [`Bus`](#bus)
 - [`Debouncer`](#debouncer)
 - [`Dispatcher`](#dispatcher)
+- [`Fault`](#fault)
 - [`Map[K, V]`](#mapk-v)
 - [`Queue[T]`](#queuet)
 - [`Retry`](#retry)
@@ -158,6 +159,25 @@ err = d.Dispatch(ctx, UserLoggedOut{UserID: "u123"})
 
 See the [Dispatcher example](examples/dispatcher/main.go) for direct synchronous dispatch, or the [Dispatcher-Queue example](examples/dispatcher-queue/main.go) for buffered dispatch.
 
+#### `Fault`
+
+Records the first fatal error reported by concurrent work. `Done` closes when
+an error is recorded. `Set(nil)` has no effect.
+
+```go
+fault := gx.NewFault()
+go func() { fault.Set(work()) }()
+
+select {
+case <-fault.Done():
+    return fault.Err()
+case <-ctx.Done():
+    return ctx.Err()
+}
+```
+
+See the [Fault example](examples/fault/main.go) for a complete runnable demonstration.
+
 #### `Map[K, V]`
 
 Generic concurrency-safe map.
@@ -169,6 +189,8 @@ if m.Set("count", 1) {
 }
 count, ok := m.Get("count")
 ```
+
+See the [Map example](examples/map/main.go) for a complete runnable demonstration.
 
 #### `Queue[T]`
 
