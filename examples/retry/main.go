@@ -15,7 +15,21 @@ import (
 	"github.com/shayanderson/gx"
 )
 
-var errServiceUnavailable = errors.New("service unavailable")
+// serviceError is a service failure that may be temporary.
+type serviceError struct {
+	temporary bool
+}
+
+// Error implements error.
+func (e *serviceError) Error() string {
+	return "service unavailable"
+}
+
+// isRetryable reports whether err is a temporary service error.
+func isRetryable(err error) bool {
+	serviceErr, ok := errors.AsType[*serviceError](err)
+	return ok && serviceErr.temporary
+}
 
 func main() {
 	retry, err := gx.NewRetry(gx.RetryOptions{
@@ -33,6 +47,10 @@ func main() {
 		// MaxDuration applies a deadline to the retry context and bounds the
 		// entire operation, including retry waits.
 		MaxDuration: time.Second,
+
+		// ShouldRetry prevents retries for permanent errors. A serviceError with
+		// temporary set to false returns from Do immediately.
+		ShouldRetry: isRetryable,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -66,7 +84,7 @@ func callService(ctx context.Context, attempt int) error {
 
 	// Simulate a dependency that recovers after three temporary failures.
 	if attempt < 4 {
-		return errServiceUnavailable
+		return &serviceError{temporary: true}
 	}
 	return nil
 }

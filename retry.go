@@ -37,6 +37,12 @@ type RetryOptions struct {
 	// a timeout to the retry context.
 	// A value of zero disables the limit.
 	MaxDuration time.Duration
+
+	// ShouldRetry reports whether err warrants another attempt.
+	// A false result returns err immediately.
+	// A nil value retries all errors.
+	// It must be safe for concurrent use when Do is called concurrently.
+	ShouldRetry func(error) bool
 }
 
 // Retry retries a function using configurable limits, delay, and backoff.
@@ -47,6 +53,7 @@ type Retry struct {
 	jitter      float64
 	maxDelay    time.Duration
 	maxDuration time.Duration
+	shouldRetry func(error) bool
 }
 
 // NewRetry returns a new Retry configured with opts.
@@ -85,14 +92,15 @@ func NewRetry(opts RetryOptions) (*Retry, error) {
 		jitter:      opts.Jitter,
 		maxDelay:    opts.MaxDelay,
 		maxDuration: opts.MaxDuration,
+		shouldRetry: opts.ShouldRetry,
 	}, nil
 }
 
-// Do executes fn until it succeeds, the maximum number of attempts is reached,
-// the retry context is done, or MaxDuration is exceeded. If Attempts and
-// MaxDuration are both zero, retries continue until fn succeeds or ctx is done.
-// It returns nil on success, the retry context error when canceled or
-// timed out, or the last error returned by fn when the attempt limit is reached.
+// Do executes fn until it succeeds, ShouldRetry rejects an error, the maximum
+// number of attempts is reached, the retry context is done, or MaxDuration is
+// exceeded. If Attempts and MaxDuration are both zero, retries continue until
+// fn succeeds or ctx is done. It returns nil on success, the retry context
+// error when canceled or timed out, or the last error returned by fn.
 func (r *Retry) Do(ctx context.Context, fn RetryFunc) error {
 	if r.maxDuration > 0 {
 		var cancel context.CancelFunc
@@ -107,6 +115,9 @@ func (r *Retry) Do(ctx context.Context, fn RetryFunc) error {
 		err = fn(ctx)
 		if err == nil {
 			return nil
+		}
+		if r.shouldRetry != nil && !r.shouldRetry(err) {
+			return err
 		}
 
 		if r.attempts > 0 && attempt == r.attempts-1 {

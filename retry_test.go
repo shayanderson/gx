@@ -3,6 +3,7 @@ package gx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -142,6 +143,53 @@ func TestRetryDoReturnsLastError(t *testing.T) {
 	})
 
 	test.ErrorIs(t, err, lastErr)
+	test.Equal(t, 3, calls)
+}
+
+func TestRetryDoStopsForNonRetryableError(t *testing.T) {
+	t.Parallel()
+
+	permanentErr := errors.New("permanent")
+	r, err := NewRetry(RetryOptions{
+		Attempts: 3,
+		Delay:    time.Hour,
+		ShouldRetry: func(err error) bool {
+			return !errors.Is(err, permanentErr)
+		},
+	})
+	test.NoError(t, err)
+	calls := 0
+
+	start := time.Now()
+	err = r.Do(t.Context(), func(context.Context) error {
+		calls++
+		return fmt.Errorf("call: %w", permanentErr)
+	})
+
+	test.ErrorIs(t, err, permanentErr)
+	test.Equal(t, 1, calls)
+	test.Less(t, time.Since(start), time.Second)
+}
+
+func TestRetryDoRetriesRetryableError(t *testing.T) {
+	t.Parallel()
+
+	retryableErr := errors.New("retryable")
+	r, err := NewRetry(RetryOptions{
+		Attempts: 3,
+		ShouldRetry: func(err error) bool {
+			return errors.Is(err, retryableErr)
+		},
+	})
+	test.NoError(t, err)
+	calls := 0
+
+	err = r.Do(t.Context(), func(context.Context) error {
+		calls++
+		return retryableErr
+	})
+
+	test.ErrorIs(t, err, retryableErr)
 	test.Equal(t, 3, calls)
 }
 
