@@ -588,7 +588,6 @@ func TestOverflowQueueTryPush(t *testing.T) {
 				OverflowOrder: tt.order,
 				OverflowSize:  1,
 			})
-			defer q.Close()
 
 			test.Equal(t, PushQueued, q.TryPush(1))
 			test.Equal(t, PushOverflowed, q.TryPush(2))
@@ -603,6 +602,41 @@ func TestOverflowQueueTryPush(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOverflowQueueTryPushNoBypass(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		gate := make(chan struct{})
+		var processed []int
+		q := NewOverflowQueue(OverflowQueueOptions[int]{
+			Size: 1,
+			Worker: func(_ context.Context, item int) error {
+				<-gate
+				processed = append(processed, item)
+				return nil
+			},
+			OverflowSize: 2,
+		})
+		test.Equal(t, PushQueued, q.TryPush(1))
+		test.Equal(t, PushOverflowed, q.TryPush(2))
+
+		runErr := make(chan error, 1)
+		go func() { runErr <- q.RunUntilClosed(t.Context()) }()
+		synctest.Wait()
+		test.Equal(t, 0, len(q.queue.queue))
+		test.Equal(t, 1, q.Overflowed())
+
+		test.Equal(t, PushOverflowed, q.TryPush(3))
+		test.Equal(t, 0, len(q.queue.queue))
+		test.Equal(t, 2, q.Overflowed())
+
+		q.Close()
+		close(gate)
+		test.NoError(t, <-runErr)
+		test.Equal(t, []int{1, 2, 3}, processed)
+	})
 }
 
 func TestOverflowQueueTryPushClosed(t *testing.T) {
