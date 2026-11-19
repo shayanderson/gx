@@ -5,6 +5,9 @@ import (
 	"sync"
 )
 
+// overflowDefaultCapacity is the default initial overflow capacity.
+const overflowDefaultCapacity = 64
+
 // OverflowOrder controls overflow refill order.
 type OverflowOrder int
 
@@ -19,6 +22,10 @@ const (
 // OverflowQueueOptions configures an OverflowQueue.
 type OverflowQueueOptions[T any] struct {
 	QueueOptions[T]
+
+	// OverflowCapacity sets initial overflow capacity, capped by a positive OverflowSize.
+	// Non-positive defaults to 64.
+	OverflowCapacity int
 
 	// OverflowOrder selects refill order. Values other than OverflowLIFO use FIFO.
 	OverflowOrder OverflowOrder
@@ -64,7 +71,10 @@ func NewOverflowQueue[T any](opts OverflowQueueOptions[T]) *OverflowQueue[T] {
 	opts.FailOnFull = false
 	q.queue = NewQueue(opts.QueueOptions)
 
-	size := cap(q.queue.queue)
+	size := opts.OverflowCapacity
+	if size <= 0 {
+		size = overflowDefaultCapacity
+	}
 	if q.limit > 0 {
 		size = min(size, q.limit)
 	}

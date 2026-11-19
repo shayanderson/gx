@@ -512,3 +512,55 @@ func TestOverflowQueueConcurrent(t *testing.T) {
 		})
 	}
 }
+
+func TestOverflowQueueCapacity(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		capacity int
+		expected int
+		limit    int
+		name     string
+	}{
+		{0, overflowDefaultCapacity, 0, "default"},
+		{-1, overflowDefaultCapacity, 0, "negative capacity"},
+		{0, overflowDefaultCapacity, -1, "negative limit"},
+		{0, 10, 10, "default limited"},
+		{512, 512, 0, "custom"},
+		{512, 100, 100, "custom limited"},
+		{16, 16, 100, "custom below limit"},
+	}
+
+	for _, order := range []struct {
+		name  string
+		order OverflowOrder
+	}{
+		{"fifo", OverflowFIFO},
+		{"lifo", OverflowLIFO},
+	} {
+		t.Run(order.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					t.Parallel()
+
+					q := NewOverflowQueue(OverflowQueueOptions[int]{
+						Size:             4096,
+						OverflowCapacity: tt.capacity,
+						OverflowOrder:    order.order,
+						OverflowSize:     tt.limit,
+					})
+					defer q.Close()
+
+					switch order.order {
+					case OverflowLIFO:
+						test.Equal(t, tt.expected, len(q.overflow.(*Stack[int]).items))
+					default:
+						test.Equal(t, tt.expected, len(q.overflow.(*Buffer[int]).items))
+					}
+				})
+			}
+		})
+	}
+}

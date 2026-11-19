@@ -24,9 +24,10 @@ func BenchmarkOverflowQueueBurst(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			q := gx.NewOverflowQueue(gx.OverflowQueueOptions[int]{
-				Size:          size,
-				Worker:        func(context.Context, int) error { return nil },
-				OverflowOrder: order,
+				Size:             size,
+				Worker:           func(context.Context, int) error { return nil },
+				OverflowCapacity: size,
+				OverflowOrder:    order,
 			})
 			for range items {
 				if !q.Push(1) {
