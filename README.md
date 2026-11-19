@@ -29,6 +29,7 @@ See the Go package documentation for complete APIs and examples. See tests for a
 - [`Dispatcher`](#dispatcher)
 - [`Fault`](#fault)
 - [`Map[K, V]`](#mapk-v)
+- [`OverflowQueue[T]`](#overflowqueuet)
 - [`Queue[T]`](#queuet)
 - [`Retry`](#retry)
 - [`Runner`](#runner)
@@ -191,6 +192,35 @@ count, ok := m.Get("count")
 ```
 
 See the [Map example](examples/map/main.go) for a complete runnable demonstration.
+
+#### `OverflowQueue[T]`
+
+Processes items with workers, buffering excess items in FIFO or LIFO order.
+
+```go
+q := gx.NewOverflowQueue(gx.OverflowQueueOptions[int]{
+    Size: 128,
+    Worker: func(ctx context.Context, item int) error {
+        fmt.Println("processing:", item)
+        return nil
+    },
+    OverflowOrder: gx.OverflowFIFO,
+    OverflowSize: 1024,
+})
+
+runErr := make(chan error, 1)
+go func() { runErr <- q.Run(ctx) }()
+
+ok := q.Push(42)           // false only when closed or overflow is full
+err := q.PushWait(ctx, 55) // waits for overflow capacity
+
+q.Close()
+err = <-runErr // waits for Run to finish
+```
+
+`OverflowSize` limits overflow items. Non-positive values allow unlimited growth. `Push` returns false when closed or overflow is full. `PushWait` waits for overflow capacity. `Close` preserves queued and overflowed items. `Drain` closes and waits for workers. LIFO applies only to overflow. Multiple workers do not guarantee processing order.
+
+See the [OverflowQueue example](examples/overflow-queue/main.go) for ordering, backpressure, and graceful shutdown.
 
 #### `Queue[T]`
 

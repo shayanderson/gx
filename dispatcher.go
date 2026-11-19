@@ -12,7 +12,7 @@ type Handler[T any] func(context.Context, T) error
 
 // Dispatcher dispatches typed values to registered handlers.
 type Dispatcher struct {
-	m map[reflect.Type][]any
+	m  map[reflect.Type][]any
 	mu sync.RWMutex
 }
 
