@@ -1,4 +1,4 @@
-// Overflow-queue demonstrates overflow ordering, backpressure, and draining.
+// Overflow-queue demonstrates ordering, push results, backpressure, and draining.
 //
 // Run with:
 //
@@ -15,12 +15,15 @@ import (
 	"github.com/shayanderson/gx"
 )
 
-// main runs ordering and bounded backpressure examples.
+// main runs ordering, push result, and backpressure examples.
 func main() {
 	if err := orderingExample("FIFO", gx.OverflowFIFO); err != nil {
 		log.Fatal(err)
 	}
 	if err := orderingExample("LIFO", gx.OverflowLIFO); err != nil {
+		log.Fatal(err)
+	}
+	if err := tryPushExample(); err != nil {
 		log.Fatal(err)
 	}
 	if err := backpressureExample(); err != nil {
@@ -139,4 +142,32 @@ func orderingExample(name string, order gx.OverflowOrder) error {
 	}
 	fmt.Printf("processed: %v\n", processed)
 	return nil
+}
+
+// tryPushExample reports placement before workers start consuming items.
+func tryPushExample() error {
+	q := gx.NewOverflowQueue(gx.OverflowQueueOptions[int]{
+		Size: 1,
+		Worker: func(_ context.Context, item int) error {
+			fmt.Printf("processed: %d\n", item)
+			return nil
+		},
+		OverflowSize: 1,
+	})
+	defer q.Close()
+
+	fmt.Println("\nTryPush:")
+	for item := 1; item <= 3; item++ {
+		switch q.TryPush(item) {
+		case gx.PushOverflowed:
+			fmt.Printf("item %d: overflow\n", item)
+		case gx.PushQueued:
+			fmt.Printf("item %d: primary queue\n", item)
+		case gx.PushRejected:
+			fmt.Printf("item %d: rejected\n", item)
+		}
+	}
+
+	q.Close()
+	return q.Run(context.Background())
 }

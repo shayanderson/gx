@@ -34,6 +34,20 @@ type OverflowQueueOptions[T any] struct {
 	OverflowSize int
 }
 
+// PushResult reports the outcome of TryPush.
+type PushResult int
+
+const (
+	// PushRejected means the item was not accepted.
+	PushRejected PushResult = iota
+
+	// PushQueued means the item entered the primary queue.
+	PushQueued
+
+	// PushOverflowed means the item entered overflow.
+	PushOverflowed
+)
+
 // overflowStore holds overflowed items.
 type overflowStore[T any] interface {
 	Len() int
@@ -149,20 +163,7 @@ func (q *OverflowQueue[T]) Overflowed() int {
 // Push enqueues an item, using overflow when full or overflow is pending.
 // It returns false when closed or the overflow limit is reached.
 func (q *OverflowQueue[T]) Push(item T) bool {
-	q.mu.Lock()
-	if q.closed {
-		q.mu.Unlock()
-		return false
-	}
-
-	ok := q.pushLocked(item)
-	q.mu.Unlock()
-
-	if !ok && q.failOnFull {
-		q.queue.fail(ErrQueueFull)
-	}
-
-	return ok
+	return q.TryPush(item) != PushRejected
 }
 
 // PushWait enqueues an item, waiting if overflow is full.
@@ -181,7 +182,7 @@ func (q *OverflowQueue[T]) PushWait(ctx context.Context, item T) error {
 			return ErrQueueClosed
 		}
 
-		if q.pushLocked(item) {
+		if q.pushLocked(item) != PushRejected {
 			q.mu.Unlock()
 			return nil
 		}
@@ -210,6 +211,25 @@ func (q *OverflowQueue[T]) Run(ctx context.Context) error {
 // Workers stop on closure, Drain cancellation, or worker failure.
 func (q *OverflowQueue[T]) RunUntilClosed(ctx context.Context) error {
 	return q.queue.RunUntilClosed(ctx)
+}
+
+// TryPush enqueues without waiting and reports placement.
+// It returns PushRejected when closed or the overflow limit is reached.
+// FailOnFull applies only to rejection at the limit.
+func (q *OverflowQueue[T]) TryPush(item T) PushResult {
+	q.mu.Lock()
+	if q.closed {
+		q.mu.Unlock()
+		return PushRejected
+	}
+
+	result := q.pushLocked(item)
+	q.mu.Unlock()
+
+	if result == PushRejected && q.failOnFull {
+		q.queue.fail(ErrQueueFull)
+	}
+	return result
 }
 
 // drain refills available capacity and closes a closed queue once overflow empties.
@@ -247,16 +267,18 @@ func (q *OverflowQueue[T]) notifyLocked() {
 	}
 }
 
-// pushLocked enqueues without bypassing overflow, rejecting items at the limit.
+// pushLocked enqueues without bypassing overflow and reports placement.
 // Caller must hold q.mu.
-func (q *OverflowQueue[T]) pushLocked(item T) bool {
+func (q *OverflowQueue[T]) pushLocked(item T) PushResult {
 	// Bypassing overflow is only safe when it is empty.
 	if q.overflow.Len() == 0 && q.queue.Push(item) {
-		return true
+		return PushQueued
 	}
 	if q.limit > 0 && q.overflow.Len() >= q.limit {
-		return false
+		return PushRejected
 	}
-
-	return q.overflow.Push(item)
+	if q.overflow.Push(item) {
+		return PushOverflowed
+	}
+	return PushRejected
 }

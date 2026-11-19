@@ -564,3 +564,60 @@ func TestOverflowQueueCapacity(t *testing.T) {
 		})
 	}
 }
+
+func TestOverflowQueueTryPush(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		failOnFull bool
+		name       string
+		order      OverflowOrder
+	}{
+		{false, "fifo/reject", OverflowFIFO},
+		{true, "fifo/fail", OverflowFIFO},
+		{false, "lifo/reject", OverflowLIFO},
+		{true, "lifo/fail", OverflowLIFO},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			q := NewOverflowQueue(OverflowQueueOptions[int]{
+				FailOnFull:    tt.failOnFull,
+				Size:          1,
+				Worker:        func(context.Context, int) error { return nil },
+				OverflowOrder: tt.order,
+				OverflowSize:  1,
+			})
+			defer q.Close()
+
+			test.Equal(t, PushQueued, q.TryPush(1))
+			test.Equal(t, PushOverflowed, q.TryPush(2))
+			test.Equal(t, PushRejected, q.TryPush(3))
+			test.Equal(t, 1, q.Overflowed())
+
+			q.Close()
+			if tt.failOnFull {
+				test.ErrorIs(t, q.Run(t.Context()), ErrQueueFull)
+			} else {
+				test.NoError(t, q.Run(t.Context()))
+			}
+		})
+	}
+}
+
+func TestOverflowQueueTryPushClosed(t *testing.T) {
+	t.Parallel()
+
+	q := NewOverflowQueue(OverflowQueueOptions[int]{
+		FailOnFull: true,
+		Size:       1,
+		Worker:     func(context.Context, int) error { return nil },
+	})
+	test.Equal(t, PushQueued, q.TryPush(1))
+
+	q.Close()
+
+	test.Equal(t, PushRejected, q.TryPush(2))
+	test.Equal(t, 0, q.Overflowed())
+	test.NoError(t, q.Run(t.Context()))
+}
