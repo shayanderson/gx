@@ -125,3 +125,17 @@ func (s *Stack[T]) popLocked() T {
 
 	return value
 }
+
+// shrink reduces empty storage to capacity and reports whether it changed.
+// capacity must be positive.
+func (s *Stack[T]) shrink(capacity int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.len != 0 || len(s.items) <= capacity {
+		return false
+	}
+
+	s.items = make([]T, capacity)
+	return true
+}

@@ -218,7 +218,7 @@ q.Close()
 err = <-runErr // waits for Run to finish
 ```
 
-`OverflowSize` limits overflow items. Non-positive values allow unlimited growth. `OverflowCapacity` sets the initial overflow capacity, which grows on demand. `Push` returns false when closed or overflow is full. `PushWait` waits for overflow capacity. `Close` preserves queued and overflowed items. `Drain` closes and waits for workers. LIFO applies only to overflow. Multiple workers do not guarantee processing order.
+`OverflowSize` limits overflow items. Non-positive values allow unlimited growth. `OverflowCapacity` sets initial overflow capacity. Storage grows on demand and shrinks back when overflow empties. `Push` returns false when closed or overflow is full. `PushWait` waits for overflow capacity. `Close` preserves queued and overflowed items. `Drain` closes and waits for workers. LIFO applies only to overflow. Multiple workers do not guarantee processing order.
 
 See the [OverflowQueue example](examples/overflow-queue/main.go) for ordering, backpressure, and graceful shutdown.
 

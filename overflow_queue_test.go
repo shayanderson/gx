@@ -655,3 +655,83 @@ func TestOverflowQueueTryPushClosed(t *testing.T) {
 	test.Equal(t, 0, q.Overflowed())
 	test.NoError(t, q.Run(t.Context()))
 }
+
+func TestOverflowQueueShrink(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		expected []int
+		name     string
+		order    OverflowOrder
+	}{
+		{[]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, "fifo", OverflowFIFO},
+		{[]int{0, 1, 9, 8, 7, 6, 5, 4, 3, 2}, "lifo", OverflowLIFO},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			synctest.Test(t, func(t *testing.T) {
+				gate := make(chan struct{})
+				var processed []int
+				q := NewOverflowQueue(OverflowQueueOptions[int]{
+					Size: 1,
+					Worker: func(_ context.Context, item int) error {
+						<-gate
+						processed = append(processed, item)
+						return nil
+					},
+					OverflowCapacity: 2,
+					OverflowOrder:    tt.order,
+				})
+				defer func() {
+					q.Close()
+					close(gate)
+					synctest.Wait()
+				}()
+
+				capacity := func() int {
+					switch tt.order {
+					case OverflowLIFO:
+						return len(q.overflow.(*Stack[int]).items)
+					default:
+						return len(q.overflow.(*Buffer[int]).items)
+					}
+				}
+
+				runErr := make(chan error, 1)
+				go func() { runErr <- q.RunUntilClosed(t.Context()) }()
+
+				var expected []int
+				for cycle := range 2 {
+					base := cycle * 10
+
+					test.True(t, q.Push(base))
+					synctest.Wait()
+
+					for item := 1; item < 10; item++ {
+						test.True(t, q.Push(base+item))
+					}
+					test.Equal(t, 8, q.Overflowed())
+					test.Equal(t, 8, capacity())
+
+					for range 10 {
+						gate <- struct{}{}
+					}
+					synctest.Wait()
+
+					test.False(t, q.Closed())
+					test.Equal(t, 0, q.Overflowed())
+					test.Equal(t, 2, capacity())
+
+					for _, item := range tt.expected {
+						expected = append(expected, base+item)
+					}
+					test.Equal(t, expected, processed)
+				}
+
+				q.Close()
+				test.NoError(t, <-runErr)
+			})
+		})
+	}
+}

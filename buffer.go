@@ -139,3 +139,18 @@ func (b *Buffer[T]) nextLocked() T {
 
 	return value
 }
+
+// shrink reduces empty storage to capacity and reports whether it changed.
+// capacity must be positive.
+func (b *Buffer[T]) shrink(capacity int) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.len != 0 || len(b.items) <= capacity {
+		return false
+	}
+
+	b.items = make([]T, capacity)
+	b.head = 0
+	return true
+}

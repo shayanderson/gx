@@ -23,8 +23,8 @@ const (
 type OverflowQueueOptions[T any] struct {
 	QueueOptions[T]
 
-	// OverflowCapacity sets initial overflow capacity, capped by a positive OverflowSize.
-	// Non-positive defaults to 64.
+	// OverflowCapacity sets initial and retained overflow capacity.
+	// Non-positive defaults to 64. A positive OverflowSize caps it.
 	OverflowCapacity int
 
 	// OverflowOrder selects refill order. Values other than OverflowLIFO use FIFO.
@@ -52,12 +52,14 @@ const (
 type overflowStore[T any] interface {
 	Len() int
 	Push(T) bool
+	shrink(capacity int) bool
 }
 
 // OverflowQueue buffers excess items and refills the queue after each job.
 // New items cannot bypass pending overflow. OverflowOrder controls refill order.
 // Multiple workers do not guarantee processing order.
 type OverflowQueue[T any] struct {
+	capacity   int
 	closed     bool
 	failOnFull bool
 	limit      int
@@ -92,6 +94,7 @@ func NewOverflowQueue[T any](opts OverflowQueueOptions[T]) *OverflowQueue[T] {
 	if q.limit > 0 {
 		size = min(size, q.limit)
 	}
+	q.capacity = size
 
 	switch opts.OverflowOrder {
 	case OverflowLIFO:
@@ -251,6 +254,10 @@ func (q *OverflowQueue[T]) drain() {
 	}
 
 	if moved {
+		// Release flood-sized storage once overflow empties.
+		if q.overflow.Len() == 0 {
+			q.overflow.shrink(q.capacity)
+		}
 		q.notifyLocked()
 	}
 
